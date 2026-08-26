@@ -1,0 +1,33 @@
+version: 1
+merchant: acct_test_XXXX
+currency: INR
+
+fee_model:
+  platform_fee_pct: 2.0
+  gst_on_fee_pct: 18.0
+  mdr_refundable: false
+
+margin:
+  floor_pct: 18.0
+  unknown_cogs: deny
+
+limits:
+  auto_approve_below_paise: 50000
+  owner_approve_above_paise: 500000
+  max_discount_pct: 20.0
+  daily_discount_budget_paise: 2500000
+
+gates:
+  return_rate_threshold: 0.25
+
+velocity:
+  max_actions_per_60s: 10
+
+offers:
+  rungs:
+    - { pct: 5,  offer_id: "offer_AAAA" }
+    - { pct: 10, offer_id: "offer_BBBB" }
+    - { pct: 15, offer_id: "offer_CCCC" }
+    - { pct: 20, offer_id: "offer_DDDD" }
+
+default: deny

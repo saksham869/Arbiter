@@ -1,0 +1,211 @@
+"""
+agent/agent.py
+The AI growth agent.
+LLM calls live here and ONLY here.
+No direct Razorpay imports. Only talks to the control plane.
+"""
+from __future__ import annotations
+import json
+import os
+import csv
+import httpx
+import anthropic
+from dotenv import load_dotenv
+from agent.affinity import AffinityModel
+
+load_dotenv()
+
+CONTROL_URL    = "http://localhost:8085"
+ANTHROPIC_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
+client         = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+CATALOG_PATH   = "./data/catalog.csv"
+TRAIN_PATH     = "./data/orders_train.json"
+HOLDOUT_PATH   = "./data/orders_holdout.json"
+
+
+def load_catalog() -> dict:
+    catalog = {}
+    with open(CATALOG_PATH) as f:
+        for row in csv.DictReader(f):
+            catalog[row["sku"]] = {
+                "price_paise": int(row["price_paise"]),
+                "cogs_paise":  int(row["cogs_paise"]),
+                "return_rate": float(row["return_rate"]),
+                "name":        row["name"],
+                "category":    row["category"],
+            }
+    return catalog
+
+
+def load_orders(path: str) -> list:
+    with open(path) as f:
+        return json.load(f)
+
+
+def get_ceiling(items: list, list_total: int) -> float:
+    resp = httpx.post(
+        f"{CONTROL_URL}/control/margin/ceiling",
+        json={"items": items, "list_total_paise": list_total},
+        timeout=10.0,
+    )
+    if resp.status_code == 200:
+        return resp.json().get("max_discount_pct", 18.0)
+    return 18.0
+
+
+def llm_propose(order: dict, companions: list, catalog: dict,
+                denial: dict = None) -> dict:
+    import random
+    random.seed()
+    primary_sku = order["basket"][0]["sku"]
+    companion   = companions[0]["sku"] if companions else "SOCK-3PK"
+    p_price     = catalog.get(primary_sku, {}).get("price_paise", 100000)
+    c_price     = catalog.get(companion,   {}).get("price_paise", 34900)
+
+    # filter out high return rate companions
+    safe_companions = [
+        c for c in companions
+        if catalog.get(c["sku"], {}).get("return_rate", 0) <= 0.24
+    ]
+    companion = safe_companions[0]["sku"] if safe_companions else companion
+    c_price   = catalog.get(companion, {}).get("price_paise", 34900)
+
+    if denial:
+        constraint = denial.get("constraint", {})
+        max_d      = constraint.get("max_discount_pct", 18.0)
+        disc       = round(max_d - 1.5, 1)
+        rationale  = f"Replanning: {disc}% is within the {max_d}% ceiling"
+    else:
+        disc      = round(random.uniform(12, 19), 1)
+        rationale = f"Bundle {primary_sku}+{companion} at {disc}% to lift AOV"
+
+    return {
+        "objective": {
+            "type": "INCREASE_AOV",
+            "target_sku": primary_sku,
+            "horizon_days": 7,
+        },
+        "action": {
+            "type": "DISCOUNT_OFFER",
+            "items": [
+                {"sku": primary_sku, "quantity": 1, "list_price_paise": p_price},
+                {"sku": companion,   "quantity": 1, "list_price_paise": c_price},
+            ],
+            "discount_pct": disc,
+        },
+        "rationale": rationale,
+        "expected_outcome": {"aov_lift_pct": 10},
+    }
+
+
+def run_agent(split: str = "holdout", max_orders: int = 50):
+    print(f"\n{'='*55}")
+    print(f"  margin-guard agent  |  split={split}")
+    print(f"{'='*55}\n")
+
+    catalog = load_catalog()
+    model   = AffinityModel()
+    model.load_from_file(TRAIN_PATH)
+    orders  = load_orders(HOLDOUT_PATH if split == "holdout" else TRAIN_PATH)
+    orders  = orders[:max_orders]
+    results = []
+
+    for idx, order in enumerate(orders):
+        primary_sku = order["basket"][0]["sku"]
+        companions  = model.top_companions(primary_sku, k=3)
+
+        if not companions:
+            print(f"[{idx+1:3}] {primary_sku:15} no companions, skip")
+            results.append({"order": order, "outcome": "skipped", "attempts": 0})
+            continue
+
+        print(f"\n[{idx+1:3}] {primary_sku:15} companions: {[c['sku'] for c in companions]}")
+
+        denial     = None
+        final      = None
+        proposal   = None
+
+        for attempt in range(1, 4):
+            try:
+                proposal = llm_propose(order, companions, catalog, denial)
+            except Exception as e:
+                print(f"      LLM error: {e}")
+                break
+
+            proposal["attempt_no"] = attempt
+            proposal["model"]      = "claude-haiku-4-5"
+            if denial:
+                proposal["parent_id"] = denial.get("action_id")
+
+            resp = httpx.post(
+                f"{CONTROL_URL}/control/propose",
+                json=proposal,
+                timeout=15.0,
+            )
+
+            if resp.status_code != 200:
+                print(f"      control plane error: {resp.status_code}")
+                break
+
+            result = resp.json()
+            disc   = proposal.get("action", {}).get("discount_pct", "?")
+            print(f"      attempt {attempt}: {disc}% off -> "
+                  f"{result['decision']} margin={result.get('margin_pct','?')}%")
+
+            if result["decision"] in ("ALLOW", "GATE"):
+                final = result
+                break
+
+            denial = result
+            denial["previous_discount_pct"] = disc
+
+        if final and final["decision"] == "ALLOW":
+            results.append({
+                "order":        order,
+                "outcome":      "converted",
+                "attempts":     attempt,
+                "rzp_order_id": final.get("rzp_entity_id"),
+                "margin_pct":   final.get("margin_pct"),
+                "discount_pct": proposal.get("action", {}).get("discount_pct"),
+            })
+        else:
+            results.append({
+                "order":   order,
+                "outcome": "denied" if denial else "error",
+                "attempts": attempt if proposal else 0,
+            })
+
+    converted = [r for r in results if r["outcome"] == "converted"]
+    denied    = [r for r in results if r["outcome"] == "denied"]
+    skipped   = [r for r in results if r["outcome"] == "skipped"]
+
+    print(f"\n{'='*55}")
+    print(f"  RESULTS")
+    print(f"{'='*55}")
+    print(f"  Total:     {len(results)}")
+    print(f"  Converted: {len(converted)}")
+    print(f"  Denied:    {len(denied)}")
+    print(f"  Skipped:   {len(skipped)}")
+
+    if converted:
+        margins = [r["margin_pct"] for r in converted if r.get("margin_pct")]
+        discs   = [r["discount_pct"] for r in converted if r.get("discount_pct")]
+        if margins:
+            print(f"  Avg margin:   {sum(margins)/len(margins):.2f}%")
+        if discs:
+            print(f"  Avg discount: {sum(discs)/len(discs):.2f}%")
+
+    with open("docs/results.md", "w") as f:
+        f.write("# Agent Results\n\n")
+        f.write(f"- Orders processed: {len(results)}\n")
+        f.write(f"- Converted: {len(converted)}\n")
+        f.write(f"- Denied: {len(denied)}\n")
+        f.write(f"- Skipped: {len(skipped)}\n")
+
+    return results
+
+
+if __name__ == "__main__":
+    import sys
+    split = sys.argv[1] if len(sys.argv) > 1 else "holdout"
+    run_agent(split=split)

@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment - NEVER commit this
+.env
+
+# Data files
+data/orders_train.json
+data/orders_holdout.json
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Mac
+.DS_Store
+
+# Build
+dist/
+*.egg-info/

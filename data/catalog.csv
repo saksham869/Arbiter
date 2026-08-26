@@ -1,0 +1,16 @@
+sku,name,category,price_paise,cogs_paise,return_rate
+SHOE-001,Running Shoes Size 8,footwear,100000,62000,0.22
+SHOE-002,Running Shoes Size 9,footwear,100000,62000,0.22
+SHOE-003,Trail Shoes,footwear,120000,74000,0.18
+SOCK-3PK,Performance Socks 3-Pack,accessories,34900,21000,0.04
+SOCK-1PK,Performance Socks Single,accessories,12900,7700,0.04
+INSOLE-1,Gel Insoles,accessories,24900,14900,0.08
+BOTTLE-1,750ml Water Bottle,accessories,59900,35900,0.06
+SHIRT-1,Dri-Fit Running Shirt,apparel,79900,47900,0.28
+SHORTS-1,Running Shorts,apparel,69900,41900,0.25
+CAP-1,Running Cap,accessories,39900,23900,0.09
+BAND-1,Resistance Band Set,fitness,44900,26900,0.11
+FOAM-1,Foam Roller,fitness,89900,53900,0.07
+WATCH-1,GPS Running Watch,electronics,299900,209900,0.15
+EARPHONE-1,Wireless Sport Earphones,electronics,199900,139900,0.18
+MAT-1,Yoga Mat,fitness,79900,47900,0.09

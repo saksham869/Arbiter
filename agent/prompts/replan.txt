@@ -1,0 +1,32 @@
+Your previous proposal was DENIED.
+
+DENIAL REASON: {reason}
+CONSTRAINT: {constraint}
+
+The maximum safe discount is {max_discount_pct}%.
+Your previous discount was {previous_discount_pct}%.
+
+ORIGINAL ORDER:
+{order}
+
+Propose a new bundle using a discount AT OR BELOW {max_discount_pct}%.
+Stay below {gate_pct}% to avoid manual approval.
+
+Return ONLY valid JSON, no explanation:
+{
+  "objective": {
+    "type": "INCREASE_AOV",
+    "target_sku": "<primary sku>",
+    "horizon_days": 7
+  },
+  "action": {
+    "type": "DISCOUNT_OFFER",
+    "items": [
+      {"sku": "<sku>", "quantity": 1, "list_price_paise": <price>},
+      {"sku": "<companion_sku>", "quantity": 1, "list_price_paise": <price>}
+    ],
+    "discount_pct": <number BELOW {max_discount_pct}>
+  },
+  "rationale": "<explain why this discount satisfies the margin constraint>",
+  "expected_outcome": {"aov_lift_pct": <estimated lift>}
+}
