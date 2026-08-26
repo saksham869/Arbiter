@@ -55,29 +55,69 @@ def get_ceiling(items: list, list_total: int) -> float:
 
 def llm_propose(order: dict, companions: list, catalog: dict,
                 denial: dict = None) -> dict:
+    """
+    MOCK LLM — replace with real Claude when API credits available.
+    Swap: remove this function body, uncomment the anthropic call below.
+    The prompts in agent/prompts/ show exact inputs the LLM would receive.
+
+    Mock deliberately shows STRATEGIC replanning, not just discount decrement:
+    - Attempt 1: aggressive discount (likely to trigger DENY)
+    - Attempt 2: different strategy — lower rung + cheaper companion
+    """
     import random
     random.seed()
     primary_sku = order["basket"][0]["sku"]
-    companion   = companions[0]["sku"] if companions else "SOCK-3PK"
     p_price     = catalog.get(primary_sku, {}).get("price_paise", 100000)
-    c_price     = catalog.get(companion,   {}).get("price_paise", 34900)
 
-    # filter out high return rate companions
-    safe_companions = [
+    # filter safe companions (return_rate <= 24%)
+    safe = [
         c for c in companions
         if catalog.get(c["sku"], {}).get("return_rate", 0) <= 0.24
     ]
-    companion = safe_companions[0]["sku"] if safe_companions else companion
-    c_price   = catalog.get(companion, {}).get("price_paise", 34900)
 
     if denial:
+        # STRATEGIC REPLAN — not just a smaller number
         constraint = denial.get("constraint", {})
         max_d      = constraint.get("max_discount_pct", 18.0)
-        disc       = round(max_d - 1.5, 1)
-        rationale  = f"Replanning: {disc}% is within the {max_d}% ceiling"
+        reason     = denial.get("reason", "")
+
+        if reason == "return_risk":
+            # strategy change: pick a completely different companion
+            alt_companions = [
+                c for c in companions
+                if catalog.get(c["sku"], {}).get("return_rate", 0) <= 0.10
+            ]
+            companion = alt_companions[0]["sku"] if alt_companions else (safe[0]["sku"] if safe else "SOCK-3PK")
+            disc      = round(min(max_d - 2.0, 18.0), 1)
+            rationale = (
+                f"Previous companion had high return rate. "
+                f"Switching to {companion} (low return risk) "
+                f"at {disc}% — within the {max_d}% economic ceiling."
+            )
+        else:
+            # margin floor — pick cheapest companion to improve margin
+            safe_sorted = sorted(
+                safe,
+                key=lambda c: catalog.get(c["sku"], {}).get("cogs_paise", 999999)
+            )
+            companion = safe_sorted[0]["sku"] if safe_sorted else (safe[0]["sku"] if safe else "SOCK-3PK")
+            disc      = round(min(max_d - 2.0, 18.0), 1)
+            rationale = (
+                f"Discount strategy violated margin floor. "
+                f"Switching to lowest-COGS companion ({companion}) "
+                f"at {disc}% — preserves objective while clearing the {max_d}% ceiling."
+            )
     else:
-        disc      = round(random.uniform(12, 19), 1)
-        rationale = f"Bundle {primary_sku}+{companion} at {disc}% to lift AOV"
+        # first attempt: slightly aggressive to show the DENY loop
+        companion = safe[0]["sku"] if safe else "SOCK-3PK"
+        disc      = round(random.uniform(26, 30), 1)
+        rationale = (
+            f"Co-purchase affinity: {companion} appears in "
+            f"{companions[0].get('affinity_score', 0)*100:.0f}% of {primary_sku} orders. "
+            f"Bundle at {disc}% to drive AOV lift."
+        )
+
+    c_price = catalog.get(companion, {}).get("price_paise", 34900)
 
     return {
         "objective": {
@@ -94,7 +134,7 @@ def llm_propose(order: dict, companions: list, catalog: dict,
             "discount_pct": disc,
         },
         "rationale": rationale,
-        "expected_outcome": {"aov_lift_pct": 10},
+        "expected_outcome": {"aov_lift_pct": 12},
     }
 
 
@@ -152,7 +192,11 @@ def run_agent(split: str = "holdout", max_orders: int = 50):
             print(f"      attempt {attempt}: {disc}% off -> "
                   f"{result['decision']} margin={result.get('margin_pct','?')}%")
 
-            if result["decision"] in ("ALLOW", "GATE"):
+            if result["decision"] == "ALLOW":
+                final = result
+                break
+            if result["decision"] == "GATE":
+                # GATE = approved but needs human — treat as success for measurement
                 final = result
                 break
 

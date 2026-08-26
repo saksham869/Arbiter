@@ -17,6 +17,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from control.margin import FeeModel, LineItem, MarginEngine
+from control.offer_selector import select_offer
 from control.policy import PolicyEngine, MerchantLimits
 from control.execution import mint_token, execute
 import control.ledger as ledger
@@ -184,11 +185,17 @@ def propose(req: ProposalIn):
 
     if decision.result == "DENY":
         return {
-            "action_id": entry.id,
-            "decision":  "DENY",
-            "reason":    decision.reason,
+            "action_id":  entry.id,
+            "decision":   "DENY",
+            "reason":     decision.reason,
             "constraint": decision.constraint,
             "margin_pct": decision.margin_pct,
+            "economic": {
+                "projected_margin_pct":  decision.margin_pct,
+                "required_margin_pct":   policy.get("margin", {}).get("floor_pct", 18.0),
+                "maximum_safe_discount": decision.constraint.get("max_discount_pct") if decision.constraint else None,
+            },
+            "replan": {"required": True, "objective_preserved": True},
         }
 
     if decision.result == "GATE":
@@ -196,9 +203,27 @@ def propose(req: ProposalIn):
             "action_id": entry.id,
             "decision":  "GATE",
             "reason":    decision.reason,
+            "margin_pct": decision.margin_pct,
         }
 
-    # ALLOW — execute
+    # ALLOW — select the highest safe offer rung
+    rungs   = policy.get("offers", {}).get("rungs", [])
+    ceiling = decision.constraint.get("max_discount_pct", 100.0) if decision.constraint else 100.0
+
+    # compute ceiling from margin engine
+    margin_ceiling = engine.engine.max_discount(
+        line_items,
+        sum(i.total_list_price_paise for i in line_items),
+        floor_pct=policy.get("margin", {}).get("floor_pct", 18.0),
+    )
+    offer = select_offer(margin_ceiling.max_discount_pct, rungs)
+
+    # build final order args with offer if available
+    if offer and offer.offer_id not in ("offer_AAAA", "offer_BBBB", "offer_CCCC", "offer_DDDD"):
+        args["offers"]      = [offer.offer_id]
+        args["force_offer"] = True
+        args["amount"]      = paid_paise
+
     token  = mint_token(entry.id)
     result = execute(entry.id, token, "create_order", args)
 
@@ -208,7 +233,17 @@ def propose(req: ProposalIn):
         "exec_status":   result.status,
         "rzp_entity_id": result.rzp_entity_id,
         "margin_pct":    decision.margin_pct,
-        "error":         result.error,
+        "selected_offer": {
+            "offer_id":     offer.offer_id if offer else None,
+            "discount_pct": offer.discount_pct if offer else req.action.discount_pct,
+            "reason":       offer.reason if offer else "no pre-registered offers",
+        },
+        "economic": {
+            "projected_margin_pct": decision.margin_pct,
+            "required_margin_pct":  policy.get("margin", {}).get("floor_pct", 18.0),
+            "ceiling_pct":          margin_ceiling.max_discount_pct,
+        },
+        "error": result.error,
     }
 
 
