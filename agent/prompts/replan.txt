@@ -1,32 +1,33 @@
-Your previous proposal was DENIED.
+Your previous bundle proposal was DENIED.
 
-DENIAL REASON: {reason}
-CONSTRAINT: {constraint}
+Denial reason: {reason}
+Constraint: {constraint}
+Maximum safe discount: {max_discount_pct}%
+Your previous discount was: {previous_discount_pct}%
 
-The maximum safe discount is {max_discount_pct}%.
-Your previous discount was {previous_discount_pct}%.
+IMPORTANT: All prices are in PAISE (1 rupee = 100 paise).
 
-ORIGINAL ORDER:
+Original order:
 {order}
 
-Propose a new bundle using a discount AT OR BELOW {max_discount_pct}%.
-Stay below {gate_pct}% to avoid manual approval.
+You MUST propose a new discount that is LESS THAN {max_discount_pct}% and LESS THAN {gate_pct}%.
+Choose a discount between 10 and {max_discount_pct}.
 
-Return ONLY valid JSON, no explanation:
+Return ONLY this JSON (no explanation, no markdown):
 {
   "objective": {
     "type": "INCREASE_AOV",
-    "target_sku": "<primary sku>",
+    "target_sku": "PRIMARY_SKU_HERE",
     "horizon_days": 7
   },
   "action": {
     "type": "DISCOUNT_OFFER",
     "items": [
-      {"sku": "<sku>", "quantity": 1, "list_price_paise": <price>},
-      {"sku": "<companion_sku>", "quantity": 1, "list_price_paise": <price>}
+      {"sku": "PRIMARY_SKU", "quantity": 1, "list_price_paise": PRIMARY_PRICE_IN_PAISE},
+      {"sku": "COMPANION_SKU", "quantity": 1, "list_price_paise": COMPANION_PRICE_IN_PAISE}
     ],
-    "discount_pct": <number BELOW {max_discount_pct}>
+    "discount_pct": A_NUMBER_BETWEEN_10_AND_{max_discount_pct}
   },
-  "rationale": "<explain why this discount satisfies the margin constraint>",
-  "expected_outcome": {"aov_lift_pct": <estimated lift>}
+  "rationale": "explain why this discount satisfies the margin constraint",
+  "expected_outcome": {"aov_lift_pct": 10}
 }

@@ -1,6 +1,6 @@
 # Agent Results
 
 - Orders processed: 50
-- Converted: 44
-- Denied: 6
+- Converted: 41
+- Denied: 9
 - Skipped: 0

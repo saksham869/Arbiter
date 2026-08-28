@@ -55,87 +55,97 @@ def get_ceiling(items: list, list_total: int) -> float:
 
 def llm_propose(order: dict, companions: list, catalog: dict,
                 denial: dict = None) -> dict:
-    """
-    MOCK LLM — replace with real Claude when API credits available.
-    Swap: remove this function body, uncomment the anthropic call below.
-    The prompts in agent/prompts/ show exact inputs the LLM would receive.
+    """Real LLM via AWS Bedrock Claude Haiku 4.5. Falls back to mock on error."""
+    import boto3
+    import json as _json
 
-    Mock deliberately shows STRATEGIC replanning, not just discount decrement:
-    - Attempt 1: aggressive discount (likely to trigger DENY)
-    - Attempt 2: different strategy — lower rung + cheaper companion
-    """
-    import random
-    random.seed()
     primary_sku = order["basket"][0]["sku"]
-    p_price     = catalog.get(primary_sku, {}).get("price_paise", 100000)
-
-    # filter safe companions (return_rate <= 24%)
-    safe = [
-        c for c in companions
-        if catalog.get(c["sku"], {}).get("return_rate", 0) <= 0.24
-    ]
+    p_price = catalog.get(primary_sku, {}).get("price_paise", 100000)
+    safe = [c for c in companions
+            if catalog.get(c["sku"], {}).get("return_rate", 0) <= 0.24]
 
     if denial:
-        # STRATEGIC REPLAN — not just a smaller number
         constraint = denial.get("constraint", {})
-        max_d      = constraint.get("max_discount_pct", 18.0)
-        reason     = denial.get("reason", "")
-
-        if reason == "return_risk":
-            # strategy change: pick a completely different companion
-            alt_companions = [
-                c for c in companions
-                if catalog.get(c["sku"], {}).get("return_rate", 0) <= 0.10
-            ]
-            companion = alt_companions[0]["sku"] if alt_companions else (safe[0]["sku"] if safe else "SOCK-3PK")
-            disc      = round(min(max_d - 2.0, 18.0), 1)
-            rationale = (
-                f"Previous companion had high return rate. "
-                f"Switching to {companion} (low return risk) "
-                f"at {disc}% — within the {max_d}% economic ceiling."
-            )
-        else:
-            # margin floor — pick cheapest companion to improve margin
-            safe_sorted = sorted(
-                safe,
-                key=lambda c: catalog.get(c["sku"], {}).get("cogs_paise", 999999)
-            )
-            companion = safe_sorted[0]["sku"] if safe_sorted else (safe[0]["sku"] if safe else "SOCK-3PK")
-            disc      = round(min(max_d - 2.0, 18.0), 1)
-            rationale = (
-                f"Discount strategy violated margin floor. "
-                f"Switching to lowest-COGS companion ({companion}) "
-                f"at {disc}% — preserves objective while clearing the {max_d}% ceiling."
-            )
+        max_d = constraint.get("max_discount_pct", 18.0)
+        prompt = (open("agent/prompts/replan.txt").read()
+            .replace("{reason}", str(denial.get("reason", "unknown")))
+            .replace("{constraint}", _json.dumps(constraint))
+            .replace("{max_discount_pct}", str(max_d))
+            .replace("{previous_discount_pct}", str(denial.get("previous_discount_pct", 30)))
+            .replace("{order}", _json.dumps(order["basket"]))
+            .replace("{gate_pct}", "19.0")
+        )
     else:
-        # first attempt: slightly aggressive to show the DENY loop
-        companion = safe[0]["sku"] if safe else "SOCK-3PK"
-        disc      = round(random.uniform(26, 30), 1)
-        rationale = (
-            f"Co-purchase affinity: {companion} appears in "
-            f"{companions[0].get('affinity_score', 0)*100:.0f}% of {primary_sku} orders. "
-            f"Bundle at {disc}% to drive AOV lift."
+        prompt = (open("agent/prompts/propose.txt").read()
+            .replace("{companions}", _json.dumps(safe[:3], indent=2))
+            .replace("{order}", _json.dumps(order["basket"]))
+            .replace("{floor_pct}", "18.0")
+            .replace("{max_discount_pct}", "19.0")
         )
 
-    c_price = catalog.get(companion, {}).get("price_paise", 34900)
+    try:
+        client = boto3.client("bedrock-runtime", region_name="us-east-1")
+        resp = client.invoke_model(
+            modelId="us.anthropic.claude-haiku-4-5-20251001-v1:0",
+            body=_json.dumps({
+                "anthropic_version": "bedrock-2023-05-31",
+                "max_tokens": 512,
+                "messages": [{"role": "user", "content": prompt}],
+            })
+        )
+        text = _json.loads(resp["body"].read())["content"][0]["text"].strip()
+        text = text.strip()
+        if text.startswith("```"):
+            lines = text.split("\n")
+            text = "\n".join(lines[1:])
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        text = text.strip()
+        start = text.find("{")
+        end   = text.rfind("}")
+        if start != -1 and end != -1:
+            text = text[start:end+1]
+        proposal = _json.loads(text)
 
-    return {
-        "objective": {
-            "type": "INCREASE_AOV",
-            "target_sku": primary_sku,
-            "horizon_days": 7,
-        },
-        "action": {
-            "type": "DISCOUNT_OFFER",
-            "items": [
-                {"sku": primary_sku, "quantity": 1, "list_price_paise": p_price},
-                {"sku": companion,   "quantity": 1, "list_price_paise": c_price},
-            ],
-            "discount_pct": disc,
-        },
-        "rationale": rationale,
-        "expected_outcome": {"aov_lift_pct": 12},
-    }
+        # CRITICAL: override prices from catalog — never trust LLM prices
+        # Claude frequently gets paise vs rupees wrong
+        items = proposal.get("action", {}).get("items", [])
+        for item in items:
+            sku = item.get("sku", "")
+            if sku in catalog:
+                item["list_price_paise"] = catalog[sku]["price_paise"]
+
+        # Validate discount is reasonable
+        disc = proposal.get("action", {}).get("discount_pct", 0)
+        if disc <= 0 or disc > 25:
+            proposal["action"]["discount_pct"] = 15.0
+
+        return proposal
+
+    except Exception as e:
+        print(f"      Bedrock error: {e}, using mock")
+        import random
+        companion = safe[0]["sku"] if safe else "SOCK-3PK"
+        c_price = catalog.get(companion, {}).get("price_paise", 34900)
+        if denial:
+            constraint = denial.get("constraint", {})
+            max_d = constraint.get("max_discount_pct", 18.0)
+            disc = round(min(max_d - 1.5, 18.0), 1)
+        else:
+            disc = round(random.uniform(24, 28), 1)
+        return {
+            "objective": {"type": "INCREASE_AOV", "target_sku": primary_sku, "horizon_days": 7},
+            "action": {
+                "type": "DISCOUNT_OFFER",
+                "items": [
+                    {"sku": primary_sku, "quantity": 1, "list_price_paise": p_price},
+                    {"sku": companion, "quantity": 1, "list_price_paise": c_price},
+                ],
+                "discount_pct": disc,
+            },
+            "rationale": f"Mock fallback: {disc}% off {primary_sku}+{companion}",
+            "expected_outcome": {"aov_lift_pct": 10},
+        }
 
 
 def run_agent(split: str = "holdout", max_orders: int = 50):
