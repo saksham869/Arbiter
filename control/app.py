@@ -231,10 +231,13 @@ def propose(req: ProposalIn):
     offer = select_offer(margin_ceiling.max_discount_pct, rungs)
 
     # build final order args with offer if available
-    if offer and offer.offer_id not in ("offer_AAAA", "offer_BBBB", "offer_CCCC", "offer_DDDD"):
-        args["offers"]      = [offer.offer_id]
-        args["force_offer"] = True
-        args["amount"]      = paid_paise
+    if offer:
+        # Only attach if this is a real offer_id (not a placeholder)
+        if not offer.offer_id.endswith(("AAAA","BBBB","CCCC","DDDD")):
+            args["offers"]      = [offer.offer_id]
+            args["force_offer"] = True
+        # amount is always the margin-safe paid amount
+        args["amount"] = paid_paise
 
     token  = mint_token(entry.id)
     result = execute(entry.id, token, "create_order", args)

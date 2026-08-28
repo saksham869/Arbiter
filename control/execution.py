@@ -37,6 +37,10 @@ class ExecResult:
     error: Optional[str]         = None
 
 
+# Idempotency store: args_hash -> ExecResult
+_executed: dict[str, ExecResult] = {}
+
+
 def mint_token(action_id: str) -> str:
     """Single-use token bound to one action."""
     token = str(uuid.uuid4())
@@ -54,7 +58,7 @@ def execute(
     Execute one Razorpay action safely.
 
     1. Verify token is valid and unused
-    2. Check idempotency (tool + args_hash)
+    2. Check idempotency (tool + args_hash) — return cached result if seen
     3. Call Razorpay
     4. 2xx  → SUCCESS
        4xx  → FAILED
@@ -78,6 +82,11 @@ def execute(
         json.dumps(args, sort_keys=True).encode()
     ).hexdigest()
 
+    idem_key = f"{tool}:{args_hash}"
+    if idem_key in _executed:
+        # replay — return original result, never re-execute
+        return _executed[idem_key]
+
     # ── Step 3: call Razorpay ─────────────────────────────────
     try:
         result = _call_razorpay(tool, args)
@@ -95,22 +104,26 @@ def execute(
         body          = result.json()
         rzp_entity_id = body.get("id")
         ledger.finalize(action_id, "SUCCESS", rzp_entity_id)
-        return ExecResult(
+        exec_result = ExecResult(
             status="SUCCESS",
             rzp_entity_id=rzp_entity_id,
             http_status=result.status_code,
         )
+        _executed[idem_key] = exec_result   # store for idempotency replay
+        return exec_result
 
     elif 400 <= result.status_code < 500:
         ledger.finalize(action_id, "FAILED")
-        return ExecResult(
+        exec_result = ExecResult(
             status="FAILED",
             http_status=result.status_code,
             error=result.text[:500],
         )
+        _executed[idem_key] = exec_result
+        return exec_result
 
     else:
-        # 5xx — outcome unknown
+        # 5xx — outcome unknown — do NOT store in idempotency cache
         ledger.finalize(action_id, "UNKNOWN")
         ledger.quarantine(
             action_id,
