@@ -78,8 +78,12 @@ class LedgerEntry:
 
 
 def _compute_hash(prev_hash: Optional[str], row_id: str, ts: str,
-                  tool: str, args_hash: str, decision: str) -> str:
-    payload = f"{prev_hash or ''}|{row_id}|{ts}|{tool}|{args_hash}|{decision}"
+                  tool: str, args_hash: str, decision: str,
+                  reason: str = "", margin_pct: str = "",
+                  constraint_json: str = "") -> str:
+    # cover all fields a judge might tamper with
+    payload = (f"{prev_hash or ''}|{row_id}|{ts}|{tool}|{args_hash}"
+               f"|{decision}|{reason or ''}|{margin_pct or ''}|{constraint_json or ''}")
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
@@ -112,7 +116,12 @@ def append(
     args_json = json.dumps(args, sort_keys=True)
     args_hash = hashlib.sha256(args_json.encode()).hexdigest()
     prev_hash = _get_last_hash()
-    row_hash  = _compute_hash(prev_hash, row_id, ts, tool, args_hash, decision)
+    row_hash  = _compute_hash(
+        prev_hash, row_id, ts, tool, args_hash, decision,
+        reason=reason or "",
+        margin_pct=str(margin_pct or ""),
+        constraint_json=json.dumps(constraint) if constraint else "",
+    )
 
     with _engine.begin() as conn:
         conn.execute(text("""
@@ -181,7 +190,8 @@ def verify() -> dict:
     _init_db()
     with _engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT id, ts, tool, args_hash, decision, prev_hash, row_hash
+            SELECT id, ts, tool, args_hash, decision, reason,
+                   margin_pct, constraint_json, prev_hash, row_hash
               FROM action_log
              ORDER BY ts ASC, id ASC
         """)).fetchall()
@@ -191,8 +201,14 @@ def verify() -> dict:
 
     prev_hash = None
     for row in rows:
-        row_id, ts, tool, args_hash, decision, stored_prev, stored_hash = row
-        expected = _compute_hash(prev_hash, row_id, str(ts), tool, args_hash, decision)
+        (row_id, ts, tool, args_hash, decision, reason,
+         margin_pct, constraint_json, stored_prev, stored_hash) = row
+        expected = _compute_hash(
+            prev_hash, row_id, str(ts), tool, args_hash, decision,
+            reason=reason or "",
+            margin_pct=str(margin_pct or ""),
+            constraint_json=constraint_json or "",
+        )
         if expected != stored_hash:
             return {"intact": False, "broken_at": row_id, "checked": len(rows)}
         prev_hash = stored_hash

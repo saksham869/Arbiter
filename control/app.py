@@ -27,6 +27,11 @@ app = FastAPI(title="margin-guard", version="0.1.0")
 # ── Load policy ───────────────────────────────────────────────
 POLICY_PATH = os.getenv("POLICY_PATH", "./policies/default.yaml")
 
+# Module-level velocity tracker — persists across requests
+# This is the fix: VelocityTracker must NOT be per-request
+from control.policy import VelocityTracker as _VT
+_VELOCITY_TRACKER = _VT(window_seconds=60)
+
 def _load_policy():
     with open(POLICY_PATH) as f:
         return yaml.safe_load(f)
@@ -52,7 +57,9 @@ def _build_engine(policy: dict, catalog: dict) -> PolicyEngine:
         max_actions_per_60s=v.get("max_actions_per_60s", 10),
         unknown_cogs=m.get("unknown_cogs", "deny"),
     )
-    return PolicyEngine(limits, fee_model, catalog)
+    engine = PolicyEngine(limits, fee_model, catalog)
+    engine.velocity = _VELOCITY_TRACKER  # shared across requests
+    return engine
 
 
 # ── Request / Response models ─────────────────────────────────
@@ -125,11 +132,16 @@ def propose(req: ProposalIn):
     engine  = _build_engine(policy, catalog)
     merchant_id = policy.get("merchant", "unknown")
 
-    # build LineItems — prefer cogs from catalog, fallback to request
+    # build LineItems — catalog is AUTHORITATIVE for COGS
+    # agent cannot inject its own cost data — that breaks the thesis
     line_items = []
     for it in req.action.items:
-        cat_entry = catalog.get(it.sku, {})
-        cogs = it.cogs_paise if it.cogs_paise is not None else cat_entry.get("cogs_paise")
+        cat_entry = catalog.get(it.sku)
+        if cat_entry is None:
+            # SKU not in catalog → unknown_cogs → DENY
+            cogs = None
+        else:
+            cogs = cat_entry.get("cogs_paise")  # catalog only, never request body
         line_items.append(LineItem(
             sku=it.sku,
             quantity=it.quantity,
@@ -263,8 +275,8 @@ def ceiling(req: CeilingRequest):
 
     items = []
     for it in req.items:
-        cat_entry = catalog.get(it.sku, {})
-        cogs = it.cogs_paise if it.cogs_paise is not None else cat_entry.get("cogs_paise")
+        cat_entry = catalog.get(it.sku)
+        cogs = cat_entry.get("cogs_paise") if cat_entry else None
         items.append(LineItem(
             sku=it.sku,
             quantity=it.quantity,
