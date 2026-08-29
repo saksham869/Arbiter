@@ -19,6 +19,7 @@ from typing import Optional
 
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
+import boto3
 
 load_dotenv()
 
@@ -27,6 +28,39 @@ DB_URL = os.getenv(
     "mysql+pymysql://marginguard:marginguard@localhost:3307/marginguard"
 )
 _engine = create_engine(DB_URL, pool_pre_ping=True)
+
+# S3 immutable audit trail
+S3_AUDIT_BUCKET = os.getenv("S3_AUDIT_BUCKET", "")
+_s3 = boto3.client("s3", region_name="us-east-1") if S3_AUDIT_BUCKET else None
+
+
+def _s3_write(row_id: str, ts: str, decision: str, reason: str,
+              margin_str: str, constraint_json: str, row_hash: str):
+    """Write an immutable copy to S3 Object Lock.
+    COMPLIANCE mode: nobody can delete this — not even AWS."""
+    if not _s3 or not S3_AUDIT_BUCKET:
+        return
+    try:
+        key  = f"actions/{ts[:10].replace('-', '/')}/{row_id}.json"
+        body = json.dumps({
+            "id":             row_id,
+            "ts":             ts,
+            "decision":       decision,
+            "reason":         reason,
+            "margin_pct":     margin_str,
+            "constraint":     constraint_json,
+            "row_hash":       row_hash,
+            "immutable_at":   datetime.utcnow().isoformat() + "Z",
+        }, indent=2).encode()
+        _s3.put_object(
+            Bucket=S3_AUDIT_BUCKET,
+            Key=key,
+            Body=body,
+            ContentType="application/json",
+        )
+    except Exception as e:
+        # S3 write failure is non-fatal — MariaDB chain is still the source of truth
+        print(f"S3 audit write failed (non-fatal): {e}")
 
 
 # ── Schema ────────────────────────────────────────────────────
@@ -220,6 +254,10 @@ def append(
             "prev_hash":      prev_hash,
             "row_hash":       row_hash,
         })
+
+    # Write immutable copy to S3 Object Lock (non-fatal if fails)
+    _s3_write(row_id, ts, decision, reason or "",
+              margin_str, cj or "", row_hash)
 
     return LedgerEntry(
         id=row_id,
