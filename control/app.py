@@ -22,9 +22,46 @@ from control.margin import FeeModel, LineItem, MarginEngine
 # AWS clients for GATE workflow
 _sqs = boto3.client("sqs", region_name="us-east-1")
 _sns = boto3.client("sns", region_name="us-east-1")
+_cw  = boto3.client("cloudwatch", region_name="us-east-1")
 SQS_QUEUE_URL  = os.getenv("SQS_APPROVAL_QUEUE_URL", "")
 SNS_TOPIC_ARN  = os.getenv("SNS_TOPIC_ARN", "")
 MERCHANT_EMAIL = os.getenv("MERCHANT_EMAIL", "")
+
+
+def _emit_metrics(decision: str, margin_pct: float, eco_score: float,
+                  discount_pct: float):
+    """Emit product-focused metrics to CloudWatch."""
+    try:
+        _cw.put_metric_data(
+            Namespace="MarginGuard",
+            MetricData=[
+                {
+                    "MetricName": "ProposalDecision",
+                    "Value": 1,
+                    "Unit": "Count",
+                    "Dimensions": [
+                        {"Name": "Decision", "Value": decision}
+                    ],
+                },
+                {
+                    "MetricName": "MarginPct",
+                    "Value": float(margin_pct or 0),
+                    "Unit": "Percent",
+                },
+                {
+                    "MetricName": "EconomicScore",
+                    "Value": float(eco_score or 0),
+                    "Unit": "None",
+                },
+                {
+                    "MetricName": "DiscountPct",
+                    "Value": float(discount_pct or 0),
+                    "Unit": "Percent",
+                },
+            ]
+        )
+    except Exception as e:
+        pass   # CloudWatch is observability — never block execution
 from control.offer_selector import select_offer
 from control.passport import issue_passport, passport_to_dict
 from control.economic_score import compute_economic_score
@@ -291,6 +328,7 @@ def propose(req: ProposalIn):
     )
 
     if decision.result == "DENY":
+        _emit_metrics("DENY", decision.margin_pct or 0, eco.score, req.action.discount_pct)
         return {
             "action_id":  entry.id,
             "decision":   "DENY",
@@ -364,6 +402,7 @@ def propose(req: ProposalIn):
             except Exception as e:
                 print(f"SNS publish failed: {e}")
 
+        _emit_metrics("GATE", decision.margin_pct or 0, eco.score, req.action.discount_pct)
         return {
             "action_id":    entry.id,
             "decision":     "GATE",
@@ -415,6 +454,7 @@ def propose(req: ProposalIn):
 
     result = execute(entry.id, token, "create_order", args, passport=passport)
 
+    _emit_metrics("ALLOW", decision.margin_pct or 0, eco.score, req.action.discount_pct)
     return {
         "action_id":     entry.id,
         "decision":      "ALLOW",
