@@ -18,6 +18,8 @@ load_dotenv()
 
 from control.margin import FeeModel, LineItem, MarginEngine
 from control.offer_selector import select_offer
+from control.passport import issue_passport, passport_to_dict
+from control.economic_score import compute_economic_score
 from control.policy import PolicyEngine, MerchantLimits
 from control.execution import mint_token, execute
 import control.ledger as ledger
@@ -152,6 +154,33 @@ def propose(req: ProposalIn):
     list_total   = sum(i.list_price_paise * i.quantity for i in line_items)
     paid_paise   = int(list_total * (1 - req.action.discount_pct / 100))
 
+    # compute economic score before adjudication
+    # wrapped in try-except: unknown COGS raises UnknownCogsError
+    # PolicyEngine will handle it as DENY — score is best-effort only
+    try:
+        margin_result = engine.engine.compute(line_items, paid_paise)
+        avg_return_rate = sum(
+            catalog.get(i.sku, {}).get("return_rate", 0) for i in line_items
+        ) / max(len(line_items), 1)
+        avg_stock = sum(
+            catalog.get(i.sku, {}).get("stock_units", 100) for i in line_items
+        ) / max(len(line_items), 1)
+        eco = compute_economic_score(
+            margin_pct=margin_result.margin_pct,
+            return_rate=avg_return_rate,
+            discount_pct=req.action.discount_pct,
+            stock_units=int(avg_stock),
+            floor_pct=policy.get("margin", {}).get("floor_pct", 18.0),
+        )
+    except Exception:
+        from control.economic_score import EconomicScoreResult
+        eco = EconomicScoreResult(
+            score=0.0, margin_pct=0.0, margin_penalty=0.0,
+            return_risk_penalty=0.0, discount_penalty=0.0,
+            inventory_bonus=0.0, decision="DENY",
+            explanation="Economic score unavailable — COGS unknown for one or more SKUs",
+        )
+
     # adjudicate
     decision = engine.check(
         items=line_items,
@@ -202,10 +231,16 @@ def propose(req: ProposalIn):
             "reason":     decision.reason,
             "constraint": decision.constraint,
             "margin_pct": decision.margin_pct,
-            "economic": {
-                "projected_margin_pct":  decision.margin_pct,
-                "required_margin_pct":   policy.get("margin", {}).get("floor_pct", 18.0),
-                "maximum_safe_discount": decision.constraint.get("max_discount_pct") if decision.constraint else None,
+            "economic_score": {
+                "score":       eco.score,
+                "decision":    eco.decision,
+                "explanation": eco.explanation,
+                "breakdown": {
+                    "margin_penalty":      eco.margin_penalty,
+                    "return_risk_penalty": eco.return_risk_penalty,
+                    "discount_penalty":    eco.discount_penalty,
+                    "inventory_bonus":     eco.inventory_bonus,
+                },
             },
             "replan": {"required": True, "objective_preserved": True},
         }
@@ -239,8 +274,24 @@ def propose(req: ProposalIn):
         # amount is always the margin-safe paid amount
         args["amount"] = paid_paise
 
-    token  = mint_token(entry.id)
-    result = execute(entry.id, token, "create_order", args)
+    token   = mint_token(entry.id)
+
+    # Issue Action Passport
+    passport = issue_passport(
+        action_id=entry.id,
+        agent_id=req.model or "growth-agent",
+        objective_type=req.objective.type,
+        allowed_action=req.action.type,
+        merchant_id=merchant_id,
+        policy_version=str(policy.get("version", "1")),
+        max_discount_pct=margin_ceiling.max_discount_pct,
+        max_amount_paise=list_total,
+        authorized_amount=paid_paise,
+        economic_score=eco.score,
+        ttl_minutes=5,
+    )
+
+    result = execute(entry.id, token, "create_order", args, passport=passport)
 
     return {
         "action_id":     entry.id,
@@ -248,15 +299,16 @@ def propose(req: ProposalIn):
         "exec_status":   result.status,
         "rzp_entity_id": result.rzp_entity_id,
         "margin_pct":    decision.margin_pct,
+        "action_passport": passport_to_dict(passport),
+        "economic_score": {
+            "score":       eco.score,
+            "decision":    eco.decision,
+            "explanation": eco.explanation,
+        },
         "selected_offer": {
             "offer_id":     offer.offer_id if offer else None,
             "discount_pct": offer.discount_pct if offer else req.action.discount_pct,
             "reason":       offer.reason if offer else "no pre-registered offers",
-        },
-        "economic": {
-            "projected_margin_pct": decision.margin_pct,
-            "required_margin_pct":  policy.get("margin", {}).get("floor_pct", 18.0),
-            "ceiling_pct":          margin_ceiling.max_discount_pct,
         },
         "error": result.error,
     }

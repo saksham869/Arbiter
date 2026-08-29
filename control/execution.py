@@ -17,6 +17,7 @@ import httpx
 from dotenv import load_dotenv
 
 import control.ledger as ledger
+from control.passport import ActionPassport, validate_passport
 
 load_dotenv()
 
@@ -53,21 +54,34 @@ def execute(
     token: str,
     tool: str,
     args: dict,
+    passport: "ActionPassport | None" = None,
 ) -> ExecResult:
     """
     Execute one Razorpay action safely.
 
-    1. Verify token is valid and unused
-    2. Check idempotency (tool + args_hash) — return cached result if seen
-    3. Call Razorpay
-    4. 2xx  → SUCCESS
-       4xx  → FAILED
-       5xx  → UNKNOWN → quarantine
-       timeout → UNKNOWN → quarantine
-    5. Finalize ledger row
+    1. Validate Action Passport (if provided)
+    2. Verify token is valid and unused
+    3. Check idempotency (tool + args_hash)
+    4. Call Razorpay
+    5. 2xx→SUCCESS  4xx→FAILED  5xx→UNKNOWN→quarantine
+    6. Finalize ledger row
     """
 
-    # ── Step 1: token check ───────────────────────────────────
+    # ── Step 1: Passport validation ───────────────────────────
+    if passport is not None:
+        valid, reason = validate_passport(passport)
+        if not valid:
+            return ExecResult(status="FAILED", error=f"passport_{reason}")
+
+        # Passport amount must match args amount
+        args_amount = args.get("amount", 0)
+        if args_amount != passport.authorized_amount:
+            return ExecResult(
+                status="FAILED",
+                error=f"passport_amount_mismatch: passport={passport.authorized_amount} args={args_amount}"
+            )
+
+    # ── Step 2: token check ───────────────────────────────────
     if token not in _used_tokens:
         return ExecResult(status="FAILED", error="invalid_or_expired_token")
 
