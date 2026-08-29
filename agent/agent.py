@@ -12,6 +12,7 @@ import httpx
 import anthropic
 from dotenv import load_dotenv
 from agent.affinity import AffinityModel
+from agent.experiment import ExperimentEngine
 
 load_dotenv()
 
@@ -153,27 +154,33 @@ def run_agent(split: str = "holdout", max_orders: int = 50):
     print(f"  margin-guard agent  |  split={split}")
     print(f"{'='*55}\n")
 
-    catalog = load_catalog()
-    model   = AffinityModel()
+    catalog  = load_catalog()
+    model    = AffinityModel()
     model.load_from_file(TRAIN_PATH)
-    orders  = load_orders(HOLDOUT_PATH if split == "holdout" else TRAIN_PATH)
-    orders  = orders[:max_orders]
-    results = []
+    orders   = load_orders(HOLDOUT_PATH if split == "holdout" else TRAIN_PATH)
+    orders   = orders[:max_orders]
+    exp      = ExperimentEngine(treatment_pct=0.5, seed=42)
 
     for idx, order in enumerate(orders):
         primary_sku = order["basket"][0]["sku"]
+        cohort      = exp.assign_cohort(order.get("order_id", str(idx)))
         companions  = model.top_companions(primary_sku, k=3)
 
         if not companions:
             print(f"[{idx+1:3}] {primary_sku:15} no companions, skip")
-            results.append({"order": order, "outcome": "skipped", "attempts": 0})
+            exp.record_control(order, catalog)
             continue
 
-        print(f"\n[{idx+1:3}] {primary_sku:15} companions: {[c['sku'] for c in companions]}")
+        if cohort == "CONTROL":
+            print(f"[{idx+1:3}] {primary_sku:15} [CONTROL]")
+            exp.record_control(order, catalog)
+            continue
 
-        denial     = None
-        final      = None
-        proposal   = None
+        print(f"\n[{idx+1:3}] {primary_sku:15} [TREATMENT] {[c['sku'] for c in companions]}")
+
+        denial   = None
+        final    = None
+        proposal = None
 
         for attempt in range(1, 4):
             try:
@@ -199,64 +206,28 @@ def run_agent(split: str = "holdout", max_orders: int = 50):
 
             result = resp.json()
             disc   = proposal.get("action", {}).get("discount_pct", "?")
+            eco    = result.get("economic_score", {})
+            score  = eco.get("score", "?") if eco else "?"
             print(f"      attempt {attempt}: {disc}% off -> "
-                  f"{result['decision']} margin={result.get('margin_pct','?')}%")
+                  f"{result['decision']} margin={result.get('margin_pct','?')}% "
+                  f"eco={score}")
 
-            if result["decision"] == "ALLOW":
-                final = result
-                break
-            if result["decision"] == "GATE":
-                # GATE = approved but needs human — treat as success for measurement
+            if result["decision"] in ("ALLOW", "GATE"):
                 final = result
                 break
 
             denial = result
             denial["previous_discount_pct"] = disc
 
-        if final and final["decision"] == "ALLOW":
-            results.append({
-                "order":        order,
-                "outcome":      "converted",
-                "attempts":     attempt,
-                "rzp_order_id": final.get("rzp_entity_id"),
-                "margin_pct":   final.get("margin_pct"),
-                "discount_pct": proposal.get("action", {}).get("discount_pct"),
-            })
-        else:
-            results.append({
-                "order":   order,
-                "outcome": "denied" if denial else "error",
-                "attempts": attempt if proposal else 0,
-            })
+        exp.record_treatment(
+            order, catalog,
+            final or denial or {},
+            action_id=final.get("action_id") if final else None,
+        )
 
-    converted = [r for r in results if r["outcome"] == "converted"]
-    denied    = [r for r in results if r["outcome"] == "denied"]
-    skipped   = [r for r in results if r["outcome"] == "skipped"]
-
-    print(f"\n{'='*55}")
-    print(f"  RESULTS")
-    print(f"{'='*55}")
-    print(f"  Total:     {len(results)}")
-    print(f"  Converted: {len(converted)}")
-    print(f"  Denied:    {len(denied)}")
-    print(f"  Skipped:   {len(skipped)}")
-
-    if converted:
-        margins = [r["margin_pct"] for r in converted if r.get("margin_pct")]
-        discs   = [r["discount_pct"] for r in converted if r.get("discount_pct")]
-        if margins:
-            print(f"  Avg margin:   {sum(margins)/len(margins):.2f}%")
-        if discs:
-            print(f"  Avg discount: {sum(discs)/len(discs):.2f}%")
-
-    with open("docs/results.md", "w") as f:
-        f.write("# Agent Results\n\n")
-        f.write(f"- Orders processed: {len(results)}\n")
-        f.write(f"- Converted: {len(converted)}\n")
-        f.write(f"- Denied: {len(denied)}\n")
-        f.write(f"- Skipped: {len(skipped)}\n")
-
-    return results
+    report = exp.save_results("docs/results.md")
+    print(report.summary())
+    return exp._results
 
 
 if __name__ == "__main__":
