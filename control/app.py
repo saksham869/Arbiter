@@ -20,6 +20,7 @@ from control.margin import FeeModel, LineItem, MarginEngine
 from control.offer_selector import select_offer
 from control.passport import issue_passport, passport_to_dict
 from control.economic_score import compute_economic_score
+from control.catalog_agent import extract_from_image, approve_extraction, get_pending
 from control.policy import PolicyEngine, MerchantLimits
 from control.execution import mint_token, execute
 import control.ledger as ledger
@@ -120,6 +121,63 @@ def _load_catalog() -> dict:
 @app.get("/control/health")
 def health():
     return {"service": "margin-guard", "status": "UP"}
+
+
+# ── Multimodal catalog endpoints ──────────────────────────────
+
+class ApproveRequest(BaseModel):
+    extraction_id: str
+    approved_skus: list[str]
+
+
+@app.post("/control/catalog/extract")
+async def catalog_extract(file: bytes = None):
+    """
+    Upload a product image or supplier invoice.
+    Claude extracts structured COGS data.
+    Returns extraction_id for human approval.
+
+    Use: curl -X POST /control/catalog/extract -F file=@invoice.png
+    """
+    from fastapi import UploadFile, File
+    return {"error": "Use /control/catalog/extract-bytes endpoint"}
+
+
+@app.post("/control/catalog/extract-bytes")
+def catalog_extract_bytes(request: dict):
+    """
+    Extract COGS from base64-encoded image.
+    body: {image_b64: str, media_type: str}
+    """
+    import base64
+    image_b64  = request.get("image_b64", "")
+    media_type = request.get("media_type", "image/png")
+    image_bytes = base64.b64decode(image_b64)
+    result = extract_from_image(image_bytes, media_type)
+    return {
+        "extraction_id": result.extraction_id,
+        "status":        result.status,
+        "extracted":     result.extracted,
+        "image_note":    result.image_note,
+        "extracted_at":  result.extracted_at,
+        "warning":       "Extracted COGS require human approval before entering trusted catalog.",
+    }
+
+
+@app.get("/control/catalog/pending")
+def catalog_pending():
+    """List extractions waiting for human approval."""
+    return {"pending": get_pending()}
+
+
+@app.post("/control/catalog/approve")
+def catalog_approve(req: ApproveRequest):
+    """
+    Human approves specific SKUs from an extraction.
+    Only approved items enter the trusted catalog.
+    """
+    result = approve_extraction(req.extraction_id, req.approved_skus)
+    return result
 
 
 @app.post("/control/propose")
