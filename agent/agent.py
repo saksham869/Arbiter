@@ -16,9 +16,11 @@ from agent.experiment import ExperimentEngine
 
 load_dotenv()
 
-CONTROL_URL    = "http://localhost:8085"
-ANTHROPIC_KEY  = os.getenv("ANTHROPIC_API_KEY", "")
-client         = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+CONTROL_URL        = "http://localhost:8085"
+ANTHROPIC_KEY      = os.getenv("ANTHROPIC_API_KEY", "")
+client             = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
+GUARDRAIL_ID       = os.getenv("BEDROCK_GUARDRAIL_ID", "")
+GUARDRAIL_VERSION  = os.getenv("BEDROCK_GUARDRAIL_VERSION", "DRAFT")
 CATALOG_PATH   = "./data/catalog.csv"
 TRAIN_PATH     = "./data/orders_train.json"
 HOLDOUT_PATH   = "./data/orders_holdout.json"
@@ -101,14 +103,27 @@ def llm_propose(order: dict, companions: list, catalog: dict,
 
     try:
         client = boto3.client("bedrock-runtime", region_name="us-east-1")
-        resp = client.invoke_model(
-            modelId="us.anthropic.claude-haiku-4-5-20251001-v1:0",
-            body=_json.dumps({
+        invoke_kwargs = {
+            "modelId": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "body": _json.dumps({
                 "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": 512,
                 "messages": [{"role": "user", "content": prompt}],
             })
-        )
+        }
+        # Apply Bedrock Guardrails if configured
+        if GUARDRAIL_ID:
+            invoke_kwargs["guardrailIdentifier"] = GUARDRAIL_ID
+            invoke_kwargs["guardrailVersion"]    = GUARDRAIL_VERSION
+
+        resp = client.invoke_model(**invoke_kwargs)
+
+        # Check if guardrail intervened
+        guardrail_action = resp.get("ResponseMetadata", {}).get(
+            "HTTPHeaders", {}
+        ).get("x-amzn-bedrock-guardrail-action", "NONE")
+        if guardrail_action == "INTERVENED":
+            raise ValueError(f"Bedrock Guardrail blocked this request")
         text = _json.loads(resp["body"].read())["content"][0]["text"].strip()
         text = text.strip()
         if text.startswith("```"):
@@ -138,6 +153,9 @@ def llm_propose(order: dict, companions: list, catalog: dict,
 
         return proposal
 
+    except ValueError as e:
+        # ValueError = guardrail blocked or empty body — re-raise, do not mock
+        raise
     except Exception as e:
         print(f"      Bedrock error: {e}, using mock")
         import random
