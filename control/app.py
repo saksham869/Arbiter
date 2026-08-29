@@ -10,6 +10,7 @@ import os
 from typing import Optional
 
 import yaml
+import boto3
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -17,6 +18,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from control.margin import FeeModel, LineItem, MarginEngine
+
+# AWS clients for GATE workflow
+_sqs = boto3.client("sqs", region_name="us-east-1")
+_sns = boto3.client("sns", region_name="us-east-1")
+SQS_QUEUE_URL  = os.getenv("SQS_APPROVAL_QUEUE_URL", "")
+SNS_TOPIC_ARN  = os.getenv("SNS_TOPIC_ARN", "")
+MERCHANT_EMAIL = os.getenv("MERCHANT_EMAIL", "")
 from control.offer_selector import select_offer
 from control.passport import issue_passport, passport_to_dict
 from control.economic_score import compute_economic_score
@@ -304,11 +312,67 @@ def propose(req: ProposalIn):
         }
 
     if decision.result == "GATE":
+        # Publish to SQS — persistent approval queue
+        gate_msg = {
+            "action_id":    entry.id,
+            "merchant_id":  merchant_id,
+            "tool":         "create_order",
+            "amount_paise": paid_paise,
+            "discount_pct": req.action.discount_pct,
+            "margin_pct":   decision.margin_pct,
+            "reason":       decision.reason,
+            "items":        [{"sku": i.sku, "qty": i.quantity} for i in line_items],
+            "economic_score": eco.score,
+        }
+        if SQS_QUEUE_URL:
+            try:
+                _sqs.send_message(
+                    QueueUrl=SQS_QUEUE_URL,
+                    MessageBody=json.dumps(gate_msg),
+                    MessageAttributes={
+                        "action_id": {
+                            "DataType": "String",
+                            "StringValue": entry.id,
+                        }
+                    }
+                )
+            except Exception as e:
+                print(f"SQS publish failed: {e}")
+
+        # Notify merchant via SNS email
+        if SNS_TOPIC_ARN and MERCHANT_EMAIL:
+            try:
+                items_str = ", ".join(
+                    f"{i.sku} x{i.quantity}" for i in line_items
+                )
+                _sns.publish(
+                    TopicArn=SNS_TOPIC_ARN,
+                    Subject="[MarginGuard] Action requires your approval",
+                    Message=(
+                        f"Your AI growth agent has proposed an action that requires approval.\n\n"
+                        f"Items:      {items_str}\n"
+                        f"Amount:     Rs.{paid_paise/100:,.2f}\n"
+                        f"Discount:   {req.action.discount_pct}%\n"
+                        f"Margin:     {decision.margin_pct}%\n"
+                        f"Eco Score:  {eco.score}/100\n"
+                        f"Reason:     {decision.reason}\n\n"
+                        f"Action ID:  {entry.id}\n\n"
+                        f"Review this action in your MarginGuard dashboard.\n"
+                        f"The AI agent will wait for your decision.\n"
+                    )
+                )
+            except Exception as e:
+                print(f"SNS publish failed: {e}")
+
         return {
-            "action_id": entry.id,
-            "decision":  "GATE",
-            "reason":    decision.reason,
-            "margin_pct": decision.margin_pct,
+            "action_id":    entry.id,
+            "decision":     "GATE",
+            "reason":       decision.reason,
+            "margin_pct":   decision.margin_pct,
+            "economic_score": eco.score,
+            "queued":       bool(SQS_QUEUE_URL),
+            "notified":     bool(SNS_TOPIC_ARN),
+            "message":      "Action queued for merchant approval. Email notification sent.",
         }
 
     # ALLOW — select the highest safe offer rung
