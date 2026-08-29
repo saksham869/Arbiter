@@ -29,9 +29,26 @@ from control.passport import ActionPassport, validate_passport
 
 load_dotenv()
 
-KEY_ID     = os.getenv("RAZORPAY_KEY_ID", "")
-KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "")
 BASE_URL   = "https://api.razorpay.com/v1"
+
+def _load_razorpay_credentials() -> tuple[str, str]:
+    """
+    Load Razorpay credentials from AWS Secrets Manager.
+    Falls back to .env if Secrets Manager is unavailable.
+    The agent never sees these credentials.
+    """
+    secret_arn = os.getenv("SECRETS_MANAGER_ARN", "")
+    if secret_arn:
+        try:
+            sm   = boto3.client("secretsmanager", region_name="us-east-1")
+            resp = sm.get_secret_value(SecretId=secret_arn)
+            data = json.loads(resp["SecretString"])
+            return data["RAZORPAY_KEY_ID"], data["RAZORPAY_KEY_SECRET"]
+        except Exception as e:
+            print(f"Secrets Manager fallback to .env: {e}")
+    return os.getenv("RAZORPAY_KEY_ID", ""), os.getenv("RAZORPAY_KEY_SECRET", "")
+
+KEY_ID, KEY_SECRET = _load_razorpay_credentials()
 
 # Single-use token store (in-memory is fine — tokens are short-lived)
 _used_tokens: dict[str, str] = {}
