@@ -77,8 +77,23 @@ def llm_propose(order: dict, companions: list, catalog: dict,
             .replace("{gate_pct}", "19.0")
         )
     else:
+        # Enrich companions with inventory data
+        enriched = []
+        for c in safe[:3]:
+            entry = catalog.get(c["sku"], {})
+            stock = int(entry.get("stock_units", 100))
+            enriched.append({
+                **c,
+                "stock_units": stock,
+                "inventory_pressure": (
+                    "HIGH" if stock > 500 else
+                    "MEDIUM" if stock > 50 else
+                    "LOW"
+                ),
+                "list_price_paise": entry.get("price_paise", 0),
+            })
         prompt = (open("agent/prompts/propose.txt").read()
-            .replace("{companions}", _json.dumps(safe[:3], indent=2))
+            .replace("{companions}", _json.dumps(enriched, indent=2))
             .replace("{order}", _json.dumps(order["basket"]))
             .replace("{floor_pct}", "18.0")
             .replace("{max_discount_pct}", "19.0")
