@@ -5,6 +5,7 @@ The agent posts proposals here. Everything else is read-only.
 """
 from __future__ import annotations
 import hashlib
+import hmac
 import json
 import os
 from typing import Optional
@@ -25,7 +26,17 @@ _sns = boto3.client("sns", region_name="us-east-1")
 _cw  = boto3.client("cloudwatch", region_name="us-east-1")
 SQS_QUEUE_URL  = os.getenv("SQS_APPROVAL_QUEUE_URL", "")
 SNS_TOPIC_ARN  = os.getenv("SNS_TOPIC_ARN", "")
-MERCHANT_EMAIL = os.getenv("MERCHANT_EMAIL", "")
+MERCHANT_EMAIL      = os.getenv("MERCHANT_EMAIL", "")
+LAMBDA_APPROVAL_URL = os.getenv("LAMBDA_APPROVAL_URL", "")
+CONTROL_PUBLIC_URL  = os.getenv("CONTROL_PUBLIC_URL", "http://localhost:8085/")
+APPROVAL_SECRET     = "mg-approval-secret-2026"
+
+
+def _approval_token(action_id: str) -> str:
+    """Same token logic as Lambda handler."""
+    return hashlib.sha256(
+        f"{action_id}:{APPROVAL_SECRET}".encode()
+    ).hexdigest()[:32]
 
 
 def _emit_metrics(decision: str, margin_pct: float, eco_score: float,
@@ -166,6 +177,80 @@ def _load_catalog() -> dict:
 @app.get("/control/health")
 def health():
     return {"service": "margin-guard", "status": "UP"}
+
+
+# ── Approval endpoints ───────────────────────────────────────
+
+class ApprovalIn(BaseModel):
+    action_id: str
+    approved: bool
+    source: str = "api"
+
+@app.get("/control/approve")
+def approve_action(action_id: str, token: str):
+    """Merchant clicks APPROVE link from email."""
+    import hashlib
+    expected = hashlib.sha256(
+        f"{action_id}:{APPROVAL_SECRET}".encode()
+    ).hexdigest()[:32]
+    if token != expected:
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse("<h2>Invalid or expired token.</h2>", status_code=403)
+
+    row = ledger.get_one(action_id)
+    if not row:
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse("<h2>Action not found.</h2>", status_code=404)
+
+    if row.get("exec_status") not in ("NOT_RUN", None):
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(
+            f"<h2>Already processed: {row['exec_status']}</h2>",
+            status_code=200
+        )
+
+    # Execute the approved action
+    from control.execution import mint_token, execute
+    args = json.loads(row.get("args_json", "{}"))
+    tok  = mint_token(action_id)
+    result = execute(action_id, tok, row.get("tool", "create_order"), args)
+
+    from fastapi.responses import HTMLResponse
+    if result.status == "SUCCESS":
+        return HTMLResponse(f"""
+        <html><body style="font-family:system-ui;max-width:600px;margin:60px auto;padding:20px">
+        <h1>margin-guard</h1>
+        <h2>Action Approved</h2>
+        <p>Order created: <strong>{result.rzp_entity_id}</strong></p>
+        <p>Amount: Rs.{args.get('amount', 0)/100:,.2f}</p>
+        <p>The AI agent has executed the approved bundle offer.</p>
+        </body></html>
+        """)
+    else:
+        return HTMLResponse(f"<h2>Execution {result.status}: {result.error}</h2>")
+
+
+@app.get("/control/reject")
+def reject_action(action_id: str, token: str):
+    """Merchant clicks REJECT link from email."""
+    import hashlib
+    expected = hashlib.sha256(
+        f"{action_id}:{APPROVAL_SECRET}".encode()
+    ).hexdigest()[:32]
+    if token != expected:
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse("<h2>Invalid or expired token.</h2>", status_code=403)
+
+    ledger.finalize(action_id, "REJECTED")
+    from fastapi.responses import HTMLResponse
+    return HTMLResponse("""
+    <html><body style="font-family:system-ui;max-width:600px;margin:60px auto;padding:20px">
+    <h1>margin-guard</h1>
+    <h2>Action Rejected</h2>
+    <p>The proposed bundle offer has been rejected.</p>
+    <p>No charge was made. The AI agent has been notified.</p>
+    </body></html>
+    """)
 
 
 # ── Multimodal catalog endpoints ──────────────────────────────
@@ -395,8 +480,9 @@ def propose(req: ProposalIn):
                         f"Eco Score:  {eco.score}/100\n"
                         f"Reason:     {decision.reason}\n\n"
                         f"Action ID:  {entry.id}\n\n"
-                        f"Review this action in your MarginGuard dashboard.\n"
-                        f"The AI agent will wait for your decision.\n"
+                        + (f"APPROVE: {CONTROL_PUBLIC_URL}control/approve?action_id={entry.id}&token={_approval_token(entry.id)}\n"
+                           f"REJECT:  {CONTROL_PUBLIC_URL}control/reject?action_id={entry.id}&token={_approval_token(entry.id)}\n\n")
+                        + f"The AI agent will wait for your decision.\n"
                     )
                 )
             except Exception as e:
