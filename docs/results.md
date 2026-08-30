@@ -7,32 +7,32 @@ Orders: 50 (23 control, 27 treatment)
 
 | Cohort | AOV | Lift |
 |---|---|---|
-| Control | Rs.987.96 | baseline |
-| Treatment | Rs.1,415.76 | +43.3% |
+| Control | Rs.1,137.65 | baseline |
+| Treatment | Rs.1,339.28 | +17.7% |
 
 ## Contribution Margin (honest metric)
 
 | Cohort | Contribution | Lift |
 |---|---|---|
-| Control | Rs.365.12 | baseline |
-| Treatment | Rs.441.94 | +21.0% |
+| Control | Rs.422.37 | baseline |
+| Treatment | Rs.443.01 | +4.9% |
 
 ## Breakdown
 
-- Converted (ALLOW + SUCCESS): 22
-- Denied: 5
+- Converted (ALLOW + SUCCESS): 23
+- Denied: 4
 - Skipped (no companions): 0
-- Avg Economic Score: 81.2/100
+- Avg Economic Score: 82.4/100
 
 ## By Category
 
 | Category | n | AOV Lift | Note |
 |---|---|---|---|
-| accessories | 10 | +213.4% |  |
-| apparel | 11 | +28.4% |  |
+| accessories | 10 | +216.5% |  |
+| apparel | 11 | +2.2% |  |
 | electronics | 1 | +0.0% |  |
-| fitness | 9 | +18.5% |  |
-| footwear | 19 | -13.8% | ← loss |
+| fitness | 9 | -16.0% | ← loss |
+| footwear | 19 | -19.2% | ← loss |
 
 ## Methodology
 
