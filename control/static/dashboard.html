@@ -1252,7 +1252,7 @@ function go(id) {
   if (id === 'security')   { renderSecurity();   return; }
   if (id === 'policy') {
     renderPolicy();
-    ['margin_floor','auto_approve','max_discount','return_rate_limit','velocity','gate_amount'].forEach(function(k,i){var el=document.getElementById('pf_'+k);if(el)el.value=[18,20,22.74,25,10,5000][i];});
+    setTimeout(function(){['margin_floor','auto_approve','max_discount','return_rate_limit','velocity','gate_amount'].forEach(function(k,i){var el=document.getElementById('pf_'+k);if(el)el.value=[18,20,22.74,25,10,5000][i];});},50);
     // Force-set input values since template literal ${} can behave unexpectedly
     document.querySelectorAll('#content input[type=number]').forEach(function(inp) {
       var k = inp.getAttribute('data-key');
