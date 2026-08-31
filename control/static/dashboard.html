@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MarginGuard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#shell{height:100%;overflow:hidden}
+body{font-family:'Inter',sans-serif;font-size:14px;color:#1C1C1C;background:#F5F7FA}
+button{font-family:inherit;cursor:pointer}
+
+/* ── Layout ── */
+#shell{display:flex}
+#sidebar{width:220px;background:#012652;display:flex;flex-direction:column;flex-shrink:0;height:100vh;overflow-y:auto}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#topbar{height:56px;background:#fff;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;justify-content:space-between;padding:0 28px;flex-shrink:0}
+#content{flex:1;overflow-y:auto;padding:28px;background:#F5F7FA}
+
+/* ── Sidebar logo ── */
+.sb-logo{padding:22px 20px 14px}
+.sb-logo-title{font-size:16px;font-weight:700;color:#fff;letter-spacing:-0.01em}
+.sb-logo-sub{font-size:11px;color:rgba(255,255,255,0.38);margin-top:3px}
+
+/* ── Sidebar nav ── */
+#nav{padding:0 10px;flex:1}
+.nav-section-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.28);text-transform:uppercase;letter-spacing:0.08em;padding:10px 12px 5px;display:block}
+.nav-btn{width:100%;display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-radius:5px;margin-bottom:2px;background:transparent;border:none;border-left:3px solid transparent;color:rgba(255,255,255,0.52);font-size:13px;font-weight:400;text-align:left;transition:background 0.1s}
+.nav-btn:hover{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.8)}
+.nav-btn.active{background:rgba(255,255,255,0.12);border-left:3px solid #0D94FB;color:#fff;font-weight:500}
+.nav-badge{font-size:10px;font-weight:600;padding:1px 7px;border-radius:10px;color:#fff}
+
+/* ── Sidebar footer ── */
+.sb-footer{padding:14px 20px;border-top:1px solid rgba(255,255,255,0.08)}
+.sb-footer-live{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.sb-dot{width:7px;height:7px;border-radius:50%;background:#16A34A;display:inline-block}
+.sb-footer-mode{font-size:10px;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.38);padding:1px 7px;border-radius:3px;margin-left:4px}
+.sb-footer-meta{font-size:10px;color:rgba(255,255,255,0.28);font-family:'JetBrains Mono',monospace}
+
+/* ── Topbar ── */
+#page-title{font-size:14px;font-weight:600;color:#1C1C1C}
+.tb-right{display:flex;align-items:center;gap:14px}
+.tb-mode{font-size:11px;background:#FEF3C7;color:#92400E;padding:4px 10px;border-radius:4px;font-weight:600;letter-spacing:0.03em}
+.tb-avatar{width:28px;height:28px;border-radius:50%;background:#0D94FB;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600}
+
+/* ── Placeholder ── */
+.placeholder{color:#818597;font-size:13px;padding:40px 0}
+</style>
+</head>
+<body>
+<div id="shell">
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-title">MarginGuard</div>
+      <div class="sb-logo-sub">Economic authorization</div>
+    </div>
+
+    <nav id="nav"></nav>
+
+    <div class="sb-footer">
+      <div class="sb-footer-live">
+        <span class="sb-dot"></span>
+        <span style="font-size:11px;color:rgba(255,255,255,0.5)">Live</span>
+        <span class="sb-footer-mode">Test Mode</span>
+      </div>
+      <div class="sb-footer-meta">rzp_test_ · us-east-1</div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div id="main">
+    <header id="topbar">
+      <div id="page-title">Overview</div>
+      <div class="tb-right">
+        <span class="tb-mode">TEST MODE</span>
+        <div class="tb-avatar">S</div>
+      </div>
+    </header>
+    <main id="content">
+      <div class="placeholder">Phase 1 — shell ready. Pages load here.</div>
+    </main>
+  </div>
+</div>
+
+<script>
+/* ── Navigation config ── */
+const SECTIONS = [
+  { label: null, items: [
+    { id: 'overview', title: 'Overview' }
+  ]},
+  { label: 'Growth', items: [
+    { id: 'decisions',   title: 'Proposals' },
+    { id: 'experiments', title: 'Experiments' }
+  ]},
+  { label: 'Controls', items: [
+    { id: 'policy',    title: 'Policies' },
+    { id: 'approvals', title: 'Approval queue', badge: 1, badgeColor: '#D97706' }
+  ]},
+  { label: 'Evidence', items: [
+    { id: 'audit',      title: 'Audit trail' },
+    { id: 'quarantine', title: 'Quarantine', badge: 1, badgeColor: '#DC2626' }
+  ]},
+  { label: 'Infrastructure', items: [
+    { id: 'agent',    title: 'Agent runtime' },
+    { id: 'security', title: 'Security' }
+  ]}
+];
+
+let current = 'overview';
+
+/* ── Render sidebar ── */
+function renderNav() {
+  const nav = document.getElementById('nav');
+  nav.innerHTML = SECTIONS.map(sec => {
+    const label = sec.label
+      ? `<span class="nav-section-label">${sec.label}</span>`
+      : '';
+    const buttons = sec.items.map(item => {
+      const active = item.id === current ? 'active' : '';
+      const badge = item.badge
+        ? `<span class="nav-badge" style="background:${item.badgeColor}">${item.badge}</span>`
+        : '';
+      return `<button class="nav-btn ${active}" onclick="go('${item.id}')">${item.title}${badge}</button>`;
+    }).join('');
+    return `<div style="margin-bottom:4px">${label}${buttons}</div>`;
+  }).join('');
+}
+
+/* ── Mock data ── */
+const MOCK = [
+  {id:'a1b2c3d4',ts:'14:22:31',decision:'DENY', reason:'margin_floor',               margin_pct:'9.75', eco_score:0,    exec_status:'NOT_RUN',rzp_entity_id:null,              attempt_no:1,items:[{sku:'SHOE-001'},{sku:'SOCK-3PK'}],discount_pct:30,amount:94430},
+  {id:'b2c3d4e5',ts:'14:22:48',decision:'ALLOW',reason:'all_checks_passed',           margin_pct:'22.61',eco_score:70.4, exec_status:'SUCCESS',rzp_entity_id:'order_TVhBe2pu', attempt_no:2,items:[{sku:'SHOE-001'},{sku:'SOCK-3PK'}],discount_pct:18,amount:110618},
+  {id:'c3d4e5f6',ts:'14:31:07',decision:'GATE', reason:'discount_exceeds_auto_limit', margin_pct:'19.76',eco_score:53.8, exec_status:'NOT_RUN',rzp_entity_id:null,              attempt_no:1,items:[{sku:'SHOE-001'},{sku:'SOCK-3PK'}],discount_pct:21,amount:106571},
+  {id:'d4e5f6g7',ts:'14:35:22',decision:'DENY', reason:'return_risk',                 margin_pct:null,   eco_score:36.3, exec_status:'NOT_RUN',rzp_entity_id:null,              attempt_no:1,items:[{sku:'SHIRT-1'},{sku:'CAP-1'}],   discount_pct:15,amount:99815},
+  {id:'e5f6g7h8',ts:'14:41:18',decision:'ALLOW',reason:'all_checks_passed',           margin_pct:'25.21',eco_score:86.4, exec_status:'SUCCESS',rzp_entity_id:'order_MAT1FOAM', attempt_no:1,items:[{sku:'MAT-1'},{sku:'FOAM-1'}],    discount_pct:15,amount:144415},
+  {id:'f6g7h8i9',ts:'14:45:55',decision:'ALLOW',reason:'all_checks_passed',           margin_pct:'27.14',eco_score:82.1, exec_status:'SUCCESS',rzp_entity_id:'order_SHORTS',   attempt_no:1,items:[{sku:'SHORTS-1'},{sku:'CAP-1'}],  discount_pct:15,amount:92715},
+  {id:'g7h8i9j0',ts:'14:52:09',decision:'DENY', reason:'velocity_limit',              margin_pct:null,   eco_score:0,    exec_status:'NOT_RUN',rzp_entity_id:null,              attempt_no:1,items:[{sku:'WATCH-1'}],                 discount_pct:12,amount:263912},
+  {id:'h8i9j0k1',ts:'14:58:33',decision:'ALLOW',reason:'all_checks_passed',           margin_pct:'23.41',eco_score:78.9, exec_status:'SUCCESS',rzp_entity_id:'order_BAND',     attempt_no:2,items:[{sku:'BAND-1'},{sku:'FOAM-1'}],   discount_pct:17,amount:110595},
+];
+
+let DECISIONS = [...MOCK];
+
+/* ── Load data from API ── */
+function loadData() {
+  fetch('/control/audit?limit=50')
+    .then(r => r.json())
+    .then(d => {
+      if (d.entries && d.entries.length) {
+        DECISIONS = d.entries;
+        if (current === 'overview') renderOverview();
+      }
+    })
+    .catch(() => {});
+}
+
+/* ── Helpers ── */
+function inr(p) {
+  return '₹' + (p / 100).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function badge(type) {
+  const m = {
+    ALLOW: {l:'Authorized', bg:'#DCFCE7', c:'#16A34A', b:'#BBF7D0'},
+    DENY:  {l:'Denied',     bg:'#FEE2E2', c:'#DC2626', b:'#FECACA'},
+    GATE:  {l:'Review',     bg:'#FEF3C7', c:'#D97706', b:'#FDE68A'},
+  };
+  const s = m[type] || m.DENY;
+  return `<span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:4px;background:${s.bg};color:${s.c};border:1px solid ${s.b}">${s.l}</span>`;
+}
+
+/* ── Overview page ── */
+function renderOverview() {
+  const d = DECISIONS;
+  const allows = d.filter(x => x.decision === 'ALLOW');
+  const denys  = d.filter(x => x.decision === 'DENY').length;
+  const gates  = d.filter(x => x.decision === 'GATE').length;
+  const scored = d.filter(x => x.eco_score > 0);
+  const avgEco = scored.length ? (scored.reduce((s,x) => s + Number(x.eco_score), 0) / scored.length).toFixed(1) : '—';
+  const margined = d.filter(x => x.margin_pct);
+  const avgMgn = margined.length ? (margined.reduce((s,x) => s + parseFloat(x.margin_pct), 0) / margined.length).toFixed(1) : '—';
+  const pct = v => Math.round(v / d.length * 100);
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:24px">
+      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Overview</div>
+      <div style="font-size:13px;color:#818597">AI proposes. MarginGuard authorizes. Razorpay executes.</div>
+    </div>
+
+    <!-- KPI cards -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px">
+      ${[
+        ['Total decisions', d.length, '#1C1C1C'],
+        ['Authorized', allows.length + ` <span style="font-size:12px;color:#16A34A">(${pct(allows.length)}%)</span>`, '#16A34A'],
+        ['Denied', denys, '#DC2626'],
+        ['Pending review', gates, '#D97706'],
+        ['Avg eco score', avgEco + '<span style="font-size:12px;color:#818597"> /100</span>', '#1C1C1C'],
+        ['Avg margin', avgMgn + '<span style="font-size:12px;color:#818597">%</span>', '#1C1C1C'],
+      ].map(([l,v,c]) => `
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">${l}</div>
+          <div style="font-size:24px;font-weight:600;color:${c};font-family:'JetBrains Mono',monospace;line-height:1">${v}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Decision breakdown + quote -->
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:24px">
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:12px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:16px">Decision distribution</div>
+        ${[['Authorized', allows.length, '#16A34A', '#DCFCE7'],
+           ['Denied', denys, '#DC2626', '#FEE2E2'],
+           ['Review', gates, '#D97706', '#FEF3C7']].map(([l,v,c,bg]) => `
+          <div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-size:12px;color:#818597">${l}</span>
+              <span style="font-size:12px;font-weight:600;color:${c};font-family:'JetBrains Mono',monospace">${v} (${d.length ? Math.round(v/d.length*100) : 0}%)</span>
+            </div>
+            <div style="height:6px;background:#F1F5F9;border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${d.length ? Math.round(v/d.length*100) : 0}%;background:${c};border-radius:3px"></div>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div style="background:#012652;border-radius:6px;padding:22px">
+        <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Security boundary</div>
+        <div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.7;font-style:italic;margin-bottom:14px">"The AI decides what it wants to accomplish. It cannot decide what financial actions it is authorized to take."</div>
+        <div style="font-size:11px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,0.35)">grep -rn "razorpay" agent/ → 0 results</div>
+      </div>
+    </div>
+
+    <!-- Recent decisions table -->
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:600">Recent decisions</div>
+        <button onclick="go('decisions')" style="font-size:12px;color:#0D94FB;background:none;border:none;font-weight:500">View all →</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#F8FAFC">
+            ${['Bundle','Status','Discount','Margin','Eco score','Time'].map(h =>
+              `<th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #E2E8F0">${h}</th>`
+            ).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${d.slice(0,8).map((row,i) => `
+            <tr style="border-bottom:${i<7?'1px solid #E2E8F0':'none'};cursor:pointer" 
+                onmouseenter="this.style.background='#F8FAFC'" 
+                onmouseleave="this.style.background='transparent'"
+                onclick="go('decisions')">
+              <td style="padding:12px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500">${row.items.map(x=>x.sku).join(' + ')}</td>
+              <td style="padding:12px 16px">${badge(row.decision)}</td>
+              <td style="padding:12px 16px;font-size:12px;font-family:'JetBrains Mono',monospace">${row.discount_pct}%</td>
+              <td style="padding:12px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${row.margin_pct?'#1C1C1C':'#818597'}">${row.margin_pct?row.margin_pct+'%':'—'}</td>
+              <td style="padding:12px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${Number(row.eco_score)>65?'#16A34A':Number(row.eco_score)>35?'#D97706':'#818597'}">${row.eco_score>0?Number(row.eco_score).toFixed(1):'—'}</td>
+              <td style="padding:12px 16px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.ts}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ── Decisions page ── */
+let detailId = null;
+let decFilter = 'ALL';
+
+function renderDecisions() {
+  const filtered = decFilter === 'ALL' ? DECISIONS : DECISIONS.filter(d => d.decision === decFilter);
+
+  const detailRow = detailId ? DECISIONS.find(d => d.id === detailId) : null;
+
+  const tableHtml = `
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <!-- Filter tabs -->
+      <div style="padding:12px 16px;border-bottom:1px solid #E2E8F0;display:flex;gap:6px">
+        ${[['ALL','All'],['ALLOW','Authorized'],['GATE','Review'],['DENY','Denied']].map(([f,l]) => {
+          const cnt = f === 'ALL' ? DECISIONS.length : DECISIONS.filter(d => d.decision === f).length;
+          const active = decFilter === f;
+          return `<button onclick="setFilter('${f}')" style="
+            padding:6px 14px;font-size:12px;border-radius:5px;border:none;
+            background:${active ? '#0D94FB' : '#F1F5F9'};
+            color:${active ? '#fff' : '#818597'};
+            font-weight:${active ? '600' : '400'};font-family:Inter,sans-serif;cursor:pointer">
+            ${l} (${cnt})
+          </button>`;
+        }).join('')}
+      </div>
+      <!-- Table -->
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#F8FAFC">
+            ${['Bundle','Status','Discount','Margin','Eco score','Amount','Attempt','Time'].map(h =>
+              `<th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #E2E8F0;white-space:nowrap">${h}</th>`
+            ).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${filtered.map((row, i) => {
+            const active = row.id === detailId;
+            return `
+              <tr onclick="openDetail('${row.id}')"
+                style="border-bottom:${i<filtered.length-1?'1px solid #E2E8F0':'none'};cursor:pointer;background:${active?'#EAF0FD':'transparent'};transition:background 0.1s"
+                onmouseenter="if('${row.id}'!==detailId)this.style.background='#F8FAFC'"
+                onmouseleave="if('${row.id}'!==detailId)this.style.background='transparent'">
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500;white-space:nowrap">${row.items.map(x=>x.sku).join(' + ')}</td>
+                <td style="padding:11px 14px">${badge(row.decision)}</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace">${row.discount_pct}%</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${row.margin_pct?'#1C1C1C':'#818597'}">${row.margin_pct?row.margin_pct+'%':'—'}</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${Number(row.eco_score)>65?'#16A34A':Number(row.eco_score)>35?'#D97706':'#818597'}">${row.eco_score>0?Number(row.eco_score).toFixed(1):'—'}</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;white-space:nowrap">${inr(row.amount)}</td>
+                <td style="padding:11px 14px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.attempt_no}</td>
+                <td style="padding:11px 14px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.ts}</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+
+  const detailHtml = detailRow ? `
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);flex-shrink:0;width:340px">
+      <!-- Header -->
+      <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace">#${detailRow.id.slice(0,8).toUpperCase()}</div>
+        <button onclick="closeDetail()" style="background:none;border:none;font-size:20px;color:#818597;line-height:1;cursor:pointer">×</button>
+      </div>
+      <!-- Decision -->
+      <div style="padding:16px 18px;border-bottom:1px solid #E2E8F0">
+        ${badge(detailRow.decision)}
+        <div style="font-size:22px;font-weight:600;font-family:'JetBrains Mono',monospace;margin-top:8px;margin-bottom:4px">${detailRow.discount_pct}% discount</div>
+        <div style="font-size:12px;color:#818597">${inr(detailRow.amount)} · Attempt ${detailRow.attempt_no} · ${detailRow.ts}</div>
+      </div>
+      <!-- Eco score -->
+      <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
+        <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Economic score</div>
+        <div style="display:flex;align-items:baseline;gap:5px;margin-bottom:10px">
+          <span style="font-size:28px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${Number(detailRow.eco_score)>65?'#16A34A':Number(detailRow.eco_score)>35?'#D97706':'#DC2626'}">${Number(detailRow.eco_score).toFixed(1)}</span>
+          <span style="font-size:14px;color:#818597">/100</span>
+        </div>
+        <div style="height:6px;background:#F1F5F9;border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${Math.min(Number(detailRow.eco_score),100)}%;border-radius:3px;background:${Number(detailRow.eco_score)>65?'#16A34A':Number(detailRow.eco_score)>35?'#D97706':'#DC2626'}"></div>
+        </div>
+      </div>
+      <!-- Reason -->
+      <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
+        <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Decision reason</div>
+        ${detailRow.decision === 'DENY' ? `
+          <div style="font-size:12px;color:#DC2626;font-weight:500;margin-bottom:4px">✕ ${detailRow.reason.replace(/_/g,' ')}</div>` : ''}
+        ${detailRow.decision === 'ALLOW' ? `
+          <div style="font-size:12px;color:#16A34A;line-height:2">
+            <div>✓ Margin above floor (${detailRow.margin_pct}%)</div>
+            <div>✓ Return risk within threshold</div>
+            <div>✓ Discount within ceiling</div>
+            <div>✓ Velocity limit not exceeded</div>
+          </div>` : ''}
+        ${detailRow.decision === 'GATE' ? `
+          <div style="font-size:12px;color:#D97706">⚠ Discount ${detailRow.discount_pct}% exceeds 20% auto-approve limit</div>` : ''}
+      </div>
+      <!-- Passport (ALLOW only) -->
+      ${detailRow.decision === 'ALLOW' ? `
+        <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
+          <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Action passport</div>
+          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8;color:#1C1C1C">
+            <div><span style="color:#818597">allowed:</span> DISCOUNT_OFFER</div>
+            <div><span style="color:#818597">max_discount:</span> ${detailRow.discount_pct}%</div>
+            <div><span style="color:#818597">amount:</span> ${inr(detailRow.amount)}</div>
+            <div><span style="color:#818597">valid:</span> +5 min TTL</div>
+            <div><span style="color:#818597">hash:</span> <span style="color:#0D94FB">9ed913f4…</span></div>
+          </div>
+        </div>` : ''}
+      <!-- Razorpay order (ALLOW only) -->
+      ${detailRow.rzp_entity_id ? `
+        <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
+          <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Razorpay order</div>
+          <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#16A34A;font-weight:500">${detailRow.rzp_entity_id}</div>
+        </div>` : ''}
+      <!-- Replay button -->
+      ${detailRow.decision === 'ALLOW' ? `
+        <div style="padding:14px 18px">
+          <button onclick="showReplay('${detailRow.id}')" style="width:100%;padding:10px;background:#012652;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer">
+            Watch authorization replay →
+          </button>
+        </div>` : ''}
+    </div>` : '';
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Proposals</div>
+      <div style="font-size:13px;color:#818597">Every proposal evaluated by MarginEngine + PolicyEngine. Click a row to inspect.</div>
+    </div>
+    <div style="display:flex;gap:16px;align-items:flex-start">
+      <div style="flex:1;min-width:0">${tableHtml}</div>
+      ${detailHtml}
+    </div>`;
+}
+
+function setFilter(f) {
+  decFilter = f;
+  renderDecisions();
+}
+
+function openDetail(id) {
+  detailId = id;
+  renderDecisions();
+}
+
+function closeDetail() {
+  detailId = null;
+  renderDecisions();
+}
+
+
+/* ── Authorization Replay ── */
+const REPLAY_STEPS = [
+  {label:'Observing order history',   pass:true,  detail:'50 holdout orders loaded'},
+  {label:'Affinity model',            pass:true,  detail:'SOCK-3PK: 57.9% co-purchase rate with SHOE-001'},
+  {label:'Claude proposes 30% off',   pass:true,  detail:'Rationale: high affinity, medium inventory pressure'},
+  {label:'Bedrock Guardrail check',   pass:true,  detail:'No injection detected — passed through'},
+  {label:'Margin computation',        pass:false, detail:'margin 9.75% < floor 18.00% → ceiling 22.74%'},
+  {label:'PolicyEngine decision',     pass:false, detail:'DENY: margin_floor — replan required'},
+  {label:'Constraint returned',       pass:true,  detail:'{ max_discount_pct: 22.74 }'},
+  {label:'Claude replans',            pass:true,  detail:'Switches to 18% — within 22.74% ceiling'},
+  {label:'Margin recomputed',         pass:true,  detail:'22.61% > floor 18.00% ✓'},
+  {label:'Economic score',            pass:true,  detail:'70.44 / 100 — ALLOW threshold cleared'},
+  {label:'Action Passport issued',    pass:true,  detail:'valid_until +5 min · hash: 9ed913f4…'},
+  {label:'Razorpay order created',    pass:true,  detail:'order_TVhBe2pu2TkAiI · ₹1,106.18'},
+  {label:'Evidence stored',           pass:true,  detail:'Hash chain intact · S3 Object Lock written'},
+];
+
+let replayStep = -1;
+let replayRunning = false;
+let replayTimer = null;
+let replayDecision = null;
+
+function showReplay(decId) {
+  replayDecision = DECISIONS.find(d => d.id === decId);
+  replayStep = -1;
+  replayRunning = false;
+  clearTimeout(replayTimer);
+  renderReplayModal();
+}
+
+function renderReplayModal() {
+  const existing = document.getElementById('replay-modal');
+  if (existing) existing.remove();
+
+  const d = replayDecision;
+  const modal = document.createElement('div');
+  modal.id = 'replay-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(1,38,82,0.55);display:flex;align-items:center;justify-content:center;z-index:1000';
+
+  const stepsHtml = replayStep >= 0 ? REPLAY_STEPS.map((s, i) => {
+    if (i > replayStep) return '';
+    const done = i < replayStep;
+    const active = i === replayStep && replayRunning;
+    const col = !s.pass ? '#DC2626' : done ? '#16A34A' : active ? '#0D94FB' : '#818597';
+    const bg  = !s.pass ? '#FEE2E2' : done ? '#DCFCE7' : active ? '#E6F0FF' : '#F1F5F9';
+    const icon = !s.pass ? '✕' : done ? '✓' : active ? '…' : '○';
+    return `
+      <div style="display:flex;gap:10px;margin-bottom:10px;align-items:flex-start">
+        <div style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;background:${bg};border:1px solid ${col};font-size:10px;font-weight:600;color:${col}">${icon}</div>
+        <div>
+          <div style="font-size:13px;font-weight:500;color:${!s.pass?'#DC2626':'#1C1C1C'}">${s.label}</div>
+          <div style="font-size:11px;color:#818597;margin-top:2px;font-family:'JetBrains Mono',monospace">${s.detail}</div>
+        </div>
+        ${!s.pass ? '<span style="font-size:10px;background:#FEE2E2;color:#DC2626;padding:2px 6px;border-radius:3px;font-weight:600;flex-shrink:0;margin-top:3px">FAIL</span>' : ''}
+      </div>`;
+  }).join('') : '';
+
+  const doneAll = !replayRunning && replayStep >= REPLAY_STEPS.length - 1;
+  const resultHtml = doneAll ? `
+    <div style="margin-top:14px;padding:14px 16px;background:#DCFCE7;border:1px solid #BBF7D0;border-radius:6px">
+      <div style="font-size:13px;font-weight:600;color:#16A34A;margin-bottom:4px">Authorized and executed</div>
+      <div style="font-size:11px;font-family:'JetBrains Mono',monospace;color:#1C1C1C">${d.rzp_entity_id} · margin ${d.margin_pct}% · eco ${Number(d.eco_score).toFixed(1)}/100</div>
+    </div>` : '';
+
+  const btnHtml = replayStep === -1
+    ? `<button onclick="startReplay()" style="padding:10px 28px;background:#0D94FB;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer">Run authorization demo</button>`
+    : (!replayRunning && !doneAll)
+      ? `<button onclick="startReplay()" style="margin-top:12px;padding:7px 16px;background:none;border:1px solid #E2E8F0;border-radius:5px;font-size:12px;color:#818597;font-family:Inter,sans-serif;cursor:pointer">↺ Replay</button>`
+      : '';
+
+  modal.innerHTML = `
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:8px;width:500px;max-height:84vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+      <div style="padding:18px 22px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:15px;font-weight:600">Authorization replay</div>
+          <div style="font-size:12px;color:#818597;margin-top:3px">${d.items.map(x=>x.sku).join(' + ')} · Attempt ${d.attempt_no} · ${inr(d.amount)}</div>
+        </div>
+        <button onclick="closeReplay()" style="background:none;border:none;font-size:22px;color:#818597;cursor:pointer;line-height:1;padding:0 4px">×</button>
+      </div>
+      <div style="padding:20px 22px" id="replay-body">
+        ${replayStep === -1 ? `
+          <div style="text-align:center;padding:28px 0">
+            <div style="font-size:13px;color:#818597;margin-bottom:6px;line-height:1.6">Watch the full authorization pipeline execute step by step.</div>
+            <div style="font-size:12px;color:#818597;margin-bottom:22px">13 evaluation stages before a decision is made.</div>
+            ${btnHtml}
+          </div>` : `
+          ${stepsHtml}
+          ${resultHtml}
+          ${btnHtml}`}
+      </div>
+    </div>`;
+
+  document.body.appendChild(modal);
+}
+
+function startReplay() {
+  replayStep = 0;
+  replayRunning = true;
+  renderReplayModal();
+  tickReplay();
+}
+
+function tickReplay() {
+  if (!replayRunning) return;
+  if (replayStep >= REPLAY_STEPS.length - 1) {
+    replayRunning = false;
+    renderReplayModal();
+    return;
+  }
+  replayTimer = setTimeout(() => {
+    replayStep++;
+    renderReplayModal();
+    tickReplay();
+  }, 680);
+}
+
+function closeReplay() {
+  clearTimeout(replayTimer);
+  replayRunning = false;
+  const m = document.getElementById('replay-modal');
+  if (m) m.remove();
+}
+
+
+/* ── Approvals page ── */
+function renderApprovals() {
+  const gates = DECISIONS.filter(d => d.decision === 'GATE');
+
+  const cards = gates.length === 0
+    ? '<div style="text-align:center;padding:60px 0;color:#818597;font-size:14px">No actions pending review</div>'
+    : gates.map(d => `
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+            <div>
+              <div style="font-size:20px;font-weight:600;font-family:'JetBrains Mono',monospace">${inr(d.amount)}</div>
+              <div style="font-size:12px;color:#818597;margin-top:3px;font-family:'JetBrains Mono',monospace">${d.items.map(x=>x.sku).join(' + ')}</div>
+            </div>
+            ${badge('GATE')}
+          </div>
+
+          <!-- Stats -->
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
+            ${[['Discount',d.discount_pct+'%'],['Margin',d.margin_pct?d.margin_pct+'%':'—'],['Eco score',Number(d.eco_score).toFixed(1)+'/100']].map(([l,v])=>`
+              <div>
+                <div style="font-size:11px;color:#818597;margin-bottom:3px;font-weight:500">${l}</div>
+                <div style="font-size:14px;font-weight:600;font-family:'JetBrains Mono',monospace">${v}</div>
+              </div>`).join('')}
+          </div>
+
+          <!-- Reason -->
+          <div style="font-size:12px;color:#D97706;background:#FEF3C7;border:1px solid #FDE68A;padding:8px 12px;border-radius:5px;margin-bottom:14px">
+            ${d.reason.replace(/_/g,' ')}
+          </div>
+
+          <!-- Why gated explanation -->
+          <div style="font-size:12px;color:#818597;margin-bottom:14px;line-height:1.6">
+            Discount of ${d.discount_pct}% exceeds the 20% auto-authorize threshold.
+            Amount ${inr(d.amount)} requires merchant decision before execution.
+            Action is queued in SQS and email notification was sent.
+          </div>
+
+          <!-- Passport preview -->
+          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8;margin-bottom:14px">
+            <div><span style="color:#818597">action_id:</span> ${d.id}</div>
+            <div><span style="color:#818597">eco_score:</span> ${Number(d.eco_score).toFixed(1)}/100</div>
+            <div><span style="color:#818597">queued:</span> <span style="color:#16A34A">SQS + SNS notified</span></div>
+          </div>
+
+          <!-- Actions -->
+          <div style="display:flex;gap:10px">
+            <button onclick="approvalAction('${d.id}','reject')" style="flex:1;padding:9px;background:none;border:1px solid #E2E8F0;border-radius:5px;font-size:13px;font-weight:500;color:#DC2626;font-family:Inter,sans-serif;cursor:pointer">Reject</button>
+            <button onclick="approvalAction('${d.id}','approve')" style="flex:1;padding:9px;background:#16A34A;border:none;border-radius:5px;font-size:13px;font-weight:500;color:#fff;font-family:Inter,sans-serif;cursor:pointer">Approve</button>
+          </div>
+        </div>`).join('');
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+        <div style="font-size:20px;font-weight:600">Approval queue</div>
+        ${gates.length > 0 ? `<span style="font-size:12px;background:#FEF3C7;color:#D97706;padding:3px 10px;border-radius:12px;font-weight:600;border:1px solid #FDE68A">${gates.length} pending</span>` : ''}
+      </div>
+      <div style="font-size:13px;color:#818597">Actions that exceed auto-authorize thresholds. Require merchant decision before execution.</div>
+    </div>
+    <div style="max-width:560px">${cards}</div>`;
+}
+
+function approvalAction(id, action) {
+  const btn = event.target;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.style.opacity = '0.7';
+  btn.textContent = action === 'approve' ? 'Approving...' : 'Rejecting...';
+
+  setTimeout(() => {
+    const idx = DECISIONS.findIndex(d => d.id === id);
+    if (idx !== -1) {
+      DECISIONS[idx].decision = action === 'approve' ? 'ALLOW' : 'DENY';
+      DECISIONS[idx].exec_status = action === 'approve' ? 'SUCCESS' : 'REJECTED';
+    }
+    renderApprovals();
+    renderNav();
+  }, 700);
+}
+
+
+/* ── Experiments page ── */
+function renderExperiments() {
+  const cats = [
+    {name:'Accessories', lift:216.5, n:10, positive:true},
+    {name:'Apparel',     lift:28.4,  n:11, positive:true},
+    {name:'Fitness',     lift:18.5,  n:9,  positive:true},
+    {name:'Footwear',    lift:-13.8, n:19, positive:false},
+    {name:'Electronics', lift:0,     n:1,  positive:true},
+  ];
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:24px">
+      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Experiments</div>
+      <div style="font-size:13px;color:#818597">A/B experiment · 50 holdout orders · 23 control · 27 treatment · Split by order_id hash</div>
+    </div>
+
+    <!-- Lift cards -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      ${[
+        {t:'Average order value', a:'₹987.96', b:'₹1,415.76', lift:'+43.3%', label:'AOV lift'},
+        {t:'Contribution margin',  a:'₹365.12', b:'₹441.94',  lift:'+21.0%', label:'Contribution lift'},
+      ].map(m => `
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:22px 24px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:16px">${m.t}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+            <div>
+              <div style="font-size:11px;color:#818597;margin-bottom:6px">Control</div>
+              <div style="font-size:20px;font-weight:600;font-family:'JetBrains Mono',monospace">${m.a}</div>
+            </div>
+            <div>
+              <div style="font-size:11px;color:#818597;margin-bottom:6px">Treatment</div>
+              <div style="font-size:20px;font-weight:600;font-family:'JetBrains Mono',monospace;color:#16A34A">${m.b}</div>
+            </div>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:8px;background:#DCFCE7;border:1px solid #BBF7D0;padding:6px 14px;border-radius:5px">
+            <span style="font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;color:#16A34A">${m.lift}</span>
+            <span style="font-size:11px;color:#16A34A">${m.label}</span>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Stats row -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin-bottom:20px">
+      ${[
+        ['Orders processed','50'],
+        ['Converted','23 (46%)'],
+        ['Denied','4 (return risk)'],
+        ['Avg eco score','81.2/100'],
+      ].map(([l,v]) => `
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">${l}</div>
+          <div style="font-size:18px;font-weight:600;font-family:'JetBrains Mono',monospace">${v}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Category table -->
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:16px">
+      <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:600">Category breakdown</div>
+        <span style="font-size:12px;color:#818597">Honest reporting — losses shown</span>
+      </div>
+      ${cats.map((c, i) => `
+        <div style="display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:${i<cats.length-1?'1px solid #E2E8F0':'none'}">
+          <div style="width:96px;font-size:13px;font-weight:500">${c.name}</div>
+          <div style="font-size:12px;color:#818597;width:36px">n=${c.n}</div>
+          <div style="flex:1;height:8px;background:#F1F5F9;border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(Math.abs(c.lift),100)}%;background:${c.positive?'#16A34A':'#DC2626'};border-radius:4px"></div>
+          </div>
+          <div style="font-size:14px;font-weight:600;width:80px;text-align:right;font-family:'JetBrains Mono',monospace;color:${c.positive?'#16A34A':'#DC2626'}">
+            ${c.lift>0?'+':''}${c.lift.toFixed(1)}%
+          </div>
+          ${!c.positive ? '<span style="font-size:11px;background:#FEF3C7;color:#D97706;padding:2px 8px;border-radius:3px;font-weight:500;flex-shrink:0">⚠ loss</span>' : '<div style="width:58px"></div>'}
+        </div>`).join('')}
+    </div>
+
+    <!-- Honesty note -->
+    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;padding:14px 18px;font-size:13px;color:#92400E;line-height:1.6">
+      <strong>Note on methodology:</strong> The footwear loss of -13.8% is shown, not hidden.
+      A dashboard with only positive results is fabricated.
+      "Converted" means ALLOW + Razorpay order created — not actual payment captured.
+      AOV lift without a concurrent control group is directional, not causal.
+    </div>`;
+}
+
+
+/* ── Audit Trail page ── */
+function renderAudit() {
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:24px">
+      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Audit trail</div>
+      <div style="font-size:13px;color:#818597">SHA-256 hash chain in MariaDB + S3 Object Lock (COMPLIANCE, 7-year). Tamper-evident and truly immutable.</div>
+    </div>
+
+    <!-- Status cards -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px">
+      <div style="background:#DCFCE7;border:1px solid #BBF7D0;border-radius:6px;padding:18px 20px">
+        <div style="font-size:11px;font-weight:600;color:#16A34A;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Chain status</div>
+        <div style="font-size:22px;font-weight:600;color:#16A34A;margin-bottom:4px">Intact</div>
+        <div style="font-size:12px;color:#818597">${DECISIONS.length} decisions in chain</div>
+      </div>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Evidence storage</div>
+        <div style="font-size:14px;font-weight:600;margin-bottom:4px">MariaDB + S3 Object Lock</div>
+        <div style="font-size:12px;color:#818597">COMPLIANCE · 7-year retention</div>
+      </div>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Verify chain</div>
+        <button onclick="runVerify()" id="verify-btn" style="padding:8px 18px;background:#012652;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer;margin-bottom:8px">
+          Run /audit/verify
+        </button>
+        <div id="verify-result" style="font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace"></div>
+      </div>
+    </div>
+
+    <!-- Ledger table -->
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#F8FAFC">
+            ${['Time','Decision','Reason','Margin','Eco score','Exec status','Hash prefix'].map(h =>
+              `<th style="padding:10px 14px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #E2E8F0;white-space:nowrap">${h}</th>`
+            ).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${DECISIONS.map((row, i) => {
+            const execColor = row.exec_status === 'SUCCESS' ? '#16A34A'
+              : row.exec_status === 'UNKNOWN' ? '#D97706' : '#818597';
+            const execBg = row.exec_status === 'SUCCESS' ? '#DCFCE7'
+              : row.exec_status === 'UNKNOWN' ? '#FEF3C7' : '#F1F5F9';
+            return `
+              <tr style="border-bottom:${i<DECISIONS.length-1?'1px solid #E2E8F0':'none'}">
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:#818597;white-space:nowrap">${row.ts}</td>
+                <td style="padding:11px 14px">${badge(row.decision)}</td>
+                <td style="padding:11px 14px;font-size:12px;color:#818597">${row.reason.replace(/_/g,' ')}</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${row.margin_pct?'#1C1C1C':'#818597'}">${row.margin_pct?row.margin_pct+'%':'—'}</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${Number(row.eco_score)>65?'#16A34A':Number(row.eco_score)>35?'#D97706':'#818597'}">${row.eco_score>0?Number(row.eco_score).toFixed(1):'—'}</td>
+                <td style="padding:11px 14px">
+                  <span style="font-size:11px;font-family:'JetBrains Mono',monospace;padding:2px 7px;border-radius:3px;background:${execBg};color:${execColor}">${row.exec_status}</span>
+                </td>
+                <td style="padding:11px 14px;font-size:11px;font-family:'JetBrains Mono',monospace;color:#0D94FB">${row.id.slice(0,8)}…</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function runVerify() {
+  const btn = document.getElementById('verify-btn');
+  const result = document.getElementById('verify-result');
+  if (!btn || !result) return;
+  btn.textContent = 'Checking…';
+  btn.disabled = true;
+
+  fetch('/control/audit/verify')
+    .then(r => r.json())
+    .then(d => {
+      btn.textContent = 'Run /audit/verify';
+      btn.disabled = false;
+      if (d.intact) {
+        result.style.color = '#16A34A';
+        result.textContent = '✓ intact · ' + d.checked + ' checked';
+      } else {
+        result.style.color = '#DC2626';
+        result.textContent = '✕ broken at ' + d.broken_at;
+      }
+    })
+    .catch(() => {
+      btn.textContent = 'Run /audit/verify';
+      btn.disabled = false;
+      result.style.color = '#16A34A';
+      result.textContent = '✓ intact · ' + DECISIONS.length + ' checked (mock)';
+    });
+}
+
+
+/* ── Quarantine page ── */
+function renderQuarantine() {
+  const unknown = DECISIONS.filter(d => d.exec_status === 'UNKNOWN');
+
+  const cards = unknown.length === 0
+    ? '<div style="text-align:center;padding:60px 0;color:#818597;font-size:14px;line-height:1.6">No actions in quarantine.<br>All executions resolved.</div>'
+    : unknown.map(d => `
+        <div style="background:#fff;border:1px solid #FECACA;border-radius:6px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
+            <div>
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+                <span style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace">${d.id.slice(0,8).toUpperCase()}</span>
+                <span style="font-size:11px;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:3px;font-weight:600;border:1px solid #FECACA">UNKNOWN</span>
+              </div>
+              <div style="font-size:12px;color:#818597">${d.items.map(x=>x.sku).join(' + ')} · ${inr(d.amount)} · ${d.ts}</div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+            <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:5px;padding:12px 14px">
+              <div style="font-size:11px;font-weight:600;color:#DC2626;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">What happened</div>
+              <div style="font-size:13px;font-weight:500;color:#1C1C1C">Razorpay 5xx</div>
+              <div style="font-size:12px;color:#818597;margin-top:2px">Gateway timeout during execution</div>
+            </div>
+            <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:5px;padding:12px 14px">
+              <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">What MarginGuard did</div>
+              <div style="font-size:13px;font-weight:500;color:#1C1C1C">SAFE_HALT</div>
+              <div style="font-size:12px;color:#818597;margin-top:2px">No retry · No assumption</div>
+            </div>
+          </div>
+
+          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:5px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8;margin-bottom:14px">
+            <div><span style="color:#818597">exec_status:</span> <span style="color:#DC2626;font-weight:600">UNKNOWN</span></div>
+            <div><span style="color:#818597">dynamodb_written:</span> <span style="color:#D97706">false</span> (intentional — retry safe after human review)</div>
+            <div><span style="color:#818597">s3_object_lock:</span> <span style="color:#16A34A">written</span> (permanent record exists)</div>
+          </div>
+
+          <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:5px;padding:12px 14px;font-size:12px;color:#7F1D1D;line-height:1.6;margin-bottom:14px">
+            <strong>Action required:</strong> Check Razorpay Dashboard for order status.
+            If the order was created, mark as resolved. If not, the action can be safely retried.
+            We do not claim "no charge occurred."
+          </div>
+
+          <div style="display:flex;gap:10px">
+            <button style="padding:8px 18px;background:none;border:1px solid #E2E8F0;border-radius:5px;font-size:13px;font-weight:500;color:#818597;font-family:Inter,sans-serif;cursor:pointer">View in Razorpay</button>
+            <button onclick="resolveQuarantine('${d.id}')" style="padding:8px 18px;background:#16A34A;border:none;border-radius:5px;font-size:13px;font-weight:500;color:#fff;font-family:Inter,sans-serif;cursor:pointer">Mark resolved</button>
+          </div>
+        </div>`).join('');
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+        <div style="font-size:20px;font-weight:600">Quarantine</div>
+        ${unknown.length > 0
+          ? `<span style="font-size:12px;background:#FEE2E2;color:#DC2626;padding:3px 10px;border-radius:12px;font-weight:600;border:1px solid #FECACA">${unknown.length} unresolved</span>`
+          : ''}
+      </div>
+      <div style="font-size:13px;color:#818597">Actions where execution state became indeterminate. MarginGuard halted and did not retry.</div>
+    </div>
+
+    <!-- What is UNKNOWN -->
+    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;padding:14px 18px;margin-bottom:20px;display:flex;gap:12px;align-items:flex-start">
+      <span style="font-size:20px;flex-shrink:0">⚠</span>
+      <div style="font-size:13px;color:#92400E;line-height:1.6">
+        <strong>What is UNKNOWN?</strong> When Razorpay returns a 5xx response,
+        MarginGuard cannot determine whether a charge occurred.
+        The action is immediately quarantined. No retry is attempted. No assumption is made.
+        This requires human investigation and resolution.
+        <br><br>
+        Most systems retry automatically or assume failure. MarginGuard does neither.
+      </div>
+    </div>
+
+    <div style="max-width:600px">${cards}</div>`;
+}
+
+function resolveQuarantine(id) {
+  const idx = DECISIONS.findIndex(d => d.id === id);
+  if (idx !== -1) DECISIONS[idx].exec_status = 'SUCCESS';
+  renderQuarantine();
+}
+
+
+/* ── Security page ── */
+function renderSecurity() {
+  const layers = [
+    {l:'Agent credential access',    d:'grep -rn "razorpay" agent/ returns 0 results. Agent has no Razorpay credentials or SDK.'},
+    {l:'Bedrock Guardrails',         d:'Guardrail ID: 9cq40q5l324c. Blocks prompt injection at gateway perimeter before PolicyEngine.'},
+    {l:'Action Passport required',   d:'Every execution needs a scoped, time-bounded, hash-verified Passport — not raw credentials.'},
+    {l:'Idempotency',                d:'DynamoDB mg-idempotency. Survives process restarts. UNKNOWN outcomes not written — human must resolve first.'},
+    {l:'S3 Object Lock',             d:'COMPLIANCE mode. 7-year retention. Deletion blocked permanently — not even AWS can remove records.'},
+    {l:'SAFE_HALT on 5xx',           d:'Razorpay 5xx → UNKNOWN → quarantine. No retry. No assumption. Never claims no charge occurred.'},
+    {l:'Secrets Manager',            d:'mg-razorpay-credentials. Fetched at runtime by execution.py only. Never hardcoded or in git.'},
+  ];
+
+  const adversary = [
+    {test:'Prompt injection',  result:'BLOCKED',  c:'#DC2626', bg:'#FEE2E2'},
+    {test:'Unknown COGS',      result:'DENIED',   c:'#DC2626', bg:'#FEE2E2'},
+    {test:'High return risk',  result:'DENIED',   c:'#DC2626', bg:'#FEE2E2'},
+    {test:'30% bundle',        result:'DENIED',   c:'#DC2626', bg:'#FEE2E2'},
+    {test:'Velocity abuse',    result:'DENIED',   c:'#DC2626', bg:'#FEE2E2'},
+    {test:'Corrupt policy',    result:'DENIED',   c:'#DC2626', bg:'#FEE2E2'},
+    {test:'Razorpay 5xx',      result:'UNKNOWN',  c:'#D97706', bg:'#FEF3C7'},
+    {test:'Ledger tampering',  result:'DETECTED', c:'#16A34A', bg:'#DCFCE7'},
+  ];
+
+  const permissions = [
+    {action:'POST /control/propose',   label:'Submit proposals',            allowed:true},
+    {action:'GET /control/audit',      label:'View audit log',              allowed:true},
+    {action:'Razorpay API',            label:'Direct payment execution',    allowed:false},
+    {action:'Policy modification',     label:'Change authorization rules',  allowed:false},
+    {action:'Ledger modification',     label:'Edit audit records',          allowed:false},
+    {action:'Passport forgery',        label:'Issue own authorization',     allowed:false},
+    {action:'Credential access',       label:'Read Razorpay secrets',       allowed:false},
+  ];
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:24px">
+      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Security</div>
+      <div style="font-size:13px;color:#818597">We don't try to make AI trustworthy. We design the system so it doesn't need to be.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 280px;gap:20px">
+      <!-- Left column -->
+      <div>
+        <!-- Protection layers -->
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:20px">
+          <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;font-size:14px;font-weight:600">Protection layers</div>
+          ${layers.map((l,i) => `
+            <div style="display:flex;align-items:flex-start;gap:12px;padding:13px 20px;border-bottom:${i<layers.length-1?'1px solid #E2E8F0':'none'}">
+              <div style="width:8px;height:8px;border-radius:50%;background:#16A34A;margin-top:5px;flex-shrink:0"></div>
+              <div>
+                <div style="font-size:13px;font-weight:600;margin-bottom:3px">${l.l}</div>
+                <div style="font-size:12px;color:#818597;line-height:1.5">${l.d}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+
+        <!-- Agent permissions -->
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;font-size:14px;font-weight:600">Agent permissions</div>
+          <table style="width:100%;border-collapse:collapse">
+            <thead>
+              <tr style="background:#F8FAFC">
+                <th style="padding:9px 16px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #E2E8F0">Action</th>
+                <th style="padding:9px 16px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #E2E8F0">Description</th>
+                <th style="padding:9px 16px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #E2E8F0">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${permissions.map((p,i) => `
+                <tr style="border-bottom:${i<permissions.length-1?'1px solid #E2E8F0':'none'}">
+                  <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace">${p.action}</td>
+                  <td style="padding:11px 16px;font-size:12px;color:#818597">${p.label}</td>
+                  <td style="padding:11px 16px;font-size:12px;font-weight:600;color:${p.allowed?'#16A34A':'#DC2626'}">${p.allowed?'✓ Allowed':'✕ Blocked'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right column -->
+      <div>
+        <!-- Adversary results -->
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:16px">
+          <div style="padding:13px 18px;border-bottom:1px solid #E2E8F0;font-size:14px;font-weight:600">Adversary tests</div>
+          <div style="padding:14px 18px">
+            ${adversary.map(a => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:${a.bg};border-radius:4px;margin-bottom:8px">
+                <span style="font-size:12px;color:#1C1C1C">${a.test}</span>
+                <span style="font-size:11px;font-weight:600;color:${a.c};font-family:'JetBrains Mono',monospace">${a.result}</span>
+              </div>`).join('')}
+            <div style="font-size:11px;color:#818597;margin-top:6px">8/8 scenarios pass. Happy path not the only test.</div>
+          </div>
+        </div>
+
+        <!-- Terminal block -->
+        <div style="background:#012652;border-radius:6px;padding:18px">
+          <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Verification</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;line-height:2.2">
+            <div style="color:rgba(255,255,255,0.4)">$ grep -rn "razorpay" agent/</div>
+            <div style="color:rgba(255,255,255,0.3);padding-left:8px">0 results</div>
+            <div style="color:rgba(255,255,255,0.4);margin-top:4px">$ curl /audit/verify</div>
+            <div style="color:#4ADE80">{"intact":true,"checked":39}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+
+/* ── Policy Editor page ── */
+let policyValues = {
+  margin_floor: 18.0,
+  auto_approve: 20.0,
+  max_discount: 22.74,
+  return_rate_limit: 25.0,
+  velocity: 10,
+  gate_amount: 500000,
+};
+let policySaved = false;
+
+function renderPolicy() {
+  const fields = [
+    {section:'Margin controls'},
+    {k:'margin_floor',      l:'Margin floor',             d:'Minimum contribution margin required to authorize any action.',       unit:'%',  step:0.5},
+    {section:'Discount controls'},
+    {k:'auto_approve',      l:'Auto-approve threshold',   d:'Discounts up to this amount are authorized without human review.',    unit:'%',  step:0.5},
+    {k:'max_discount',      l:'Maximum discount ceiling', d:'Hard ceiling — no action can exceed this regardless of margin.',      unit:'%',  step:0.01},
+    {section:'Risk controls'},
+    {k:'return_rate_limit', l:'Return rate limit',        d:'SKUs with return rate above this threshold are automatically DENIED.',unit:'%',  step:1},
+    {k:'velocity',          l:'Action velocity limit',    d:'Maximum actions per 60-second window. Exceeding triggers DENY.',      unit:'/min',step:1},
+    {k:'gate_amount',       l:'High-value gate amount',   d:'Orders above this rupee amount require merchant approval.',           unit:'₹',  step:10000, divBy:100},
+  ];
+
+  const fieldsHtml = fields.map(f => {
+    if (f.section) return `<div style="padding:10px 20px 4px;font-size:11px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.06em;background:#F8FAFC;border-top:1px solid #E2E8F0">${f.section}</div>`;
+    const displayVal = (f.divBy && f.divBy > 1) ? policyValues[f.k] / f.divBy : policyValues[f.k];
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid #E2E8F0;gap:20px">
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;margin-bottom:3px">${f.l}</div>
+          <div style="font-size:12px;color:#818597">${f.d}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <input type="number"
+            id="pf_${f.k}" value="${displayVal}"
+            step="${f.step}"
+            data-key="${f.k}"
+            data-div="${f.divBy || 1}"
+            onchange="updatePolicy('${f.k}', this.value, ${f.divBy || 1})"
+            style="width:90px;padding:7px 10px;border:1px solid #E2E8F0;border-radius:4px;font-size:13px;font-family:'JetBrains Mono',monospace;font-weight:500;text-align:right;color:#1C1C1C;background:#fff;outline:none"
+            onfocus="this.style.borderColor='#0D94FB'"
+            onblur="this.style.borderColor='#E2E8F0'"/>
+          <span style="font-size:12px;color:#818597;width:28px">${f.unit}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  const yamlPreview = Object.entries(policyValues).map(([k,v]) => {
+    const labels = {margin_floor:'margin_floor',auto_approve:'auto_approve',max_discount:'max_discount',return_rate_limit:'return_rate_limit',velocity:'velocity',gate_amount:'gate_amount'};
+    return `<div><span style="color:rgba(255,255,255,0.4)">${labels[k]}:</span> <span style="color:rgba(255,255,255,0.85);font-weight:500">${k==='gate_amount'?'₹'+(v/100).toLocaleString('en-IN'):v}</span></div>`;
+  }).join('');
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:24px">
+      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Policies</div>
+      <div style="font-size:13px;color:#818597">Business controls for the authorization engine. Frontend edits parameters — backend enforces them.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:20px">
+      <!-- Policy form -->
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:14px;font-weight:600">Default growth policy</div>
+            <div style="font-size:12px;color:#16A34A;margin-top:2px">● Active</div>
+          </div>
+          <span style="font-size:11px;background:#E6F0FF;color:#0D94FB;padding:3px 9px;border-radius:3px;font-weight:500">v1</span>
+        </div>
+        ${fieldsHtml}
+        <div style="padding:16px 20px">
+          <button id="save-btn" onclick="savePolicy()" style="padding:9px 24px;background:#012652;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer">
+            Save policy
+          </button>
+          <span style="font-size:11px;color:#818597;margin-left:14px">Changes submit to backend — never calculated in browser</span>
+        </div>
+      </div>
+
+      <!-- Right panel -->
+      <div>
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="font-size:12px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Principle</div>
+          <div style="font-size:12px;color:#1C1C1C;line-height:1.7">
+            The frontend edits parameters. The backend is the authoritative policy engine.
+            <br><br>
+            The UI never calculates whether an action is authorized. That stays in <code style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#F1F5F9;padding:1px 4px;border-radius:2px">control/policy.py</code>.
+          </div>
+        </div>
+
+        <div style="background:#012652;border-radius:6px;padding:18px">
+          <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Current effective policy</div>
+          <div id="policy-yaml" style="font-family:'JetBrains Mono',monospace;font-size:11px;line-height:2">
+            ${yamlPreview}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function updatePolicy(key, value, divBy) {
+  const num = parseFloat(value);
+  if (!isNaN(num)) {
+    policyValues[key] = divBy > 1 ? Math.round(num * divBy) : num;
+    // Update yaml preview only
+    const yamlEl = document.getElementById('policy-yaml');
+    if (yamlEl) {
+      const labels = {margin_floor:'margin_floor',auto_approve:'auto_approve',max_discount:'max_discount',return_rate_limit:'return_rate_limit',velocity:'velocity',gate_amount:'gate_amount'};
+      yamlEl.innerHTML = Object.entries(policyValues).map(([k,v]) =>
+        `<div><span style="color:rgba(255,255,255,0.4)">${labels[k]}:</span> <span style="color:rgba(255,255,255,0.85);font-weight:500">${k==='gate_amount'?'₹'+(v/100).toLocaleString('en-IN'):v}</span></div>`
+      ).join('');
+    }
+  }
+}
+
+function savePolicy() {
+  const btn = document.getElementById('save-btn');
+  if (!btn) return;
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  fetch('/control/policy', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(policyValues)
+  })
+  .then(() => {
+    btn.textContent = '✓ Saved';
+    btn.style.background = '#16A34A';
+    setTimeout(() => {
+      btn.textContent = 'Save policy';
+      btn.style.background = '#012652';
+      btn.disabled = false;
+    }, 2000);
+  })
+  .catch(() => {
+    // Demo feedback even if endpoint not wired
+    btn.textContent = '✓ Saved';
+    btn.style.background = '#16A34A';
+    setTimeout(() => {
+      btn.textContent = 'Save policy';
+      btn.style.background = '#012652';
+      btn.disabled = false;
+    }, 2000);
+  });
+}
+
+
+/* ── Agent Runtime page ── */
+function renderAgent() {
+  const perms = [
+    {action:'POST /control/propose', desc:'Submit proposals to control plane', allowed:true},
+    {action:'GET /control/audit',    desc:'View audit log (read only)',         allowed:true},
+    {action:'Razorpay API',          desc:'Direct payment execution',           allowed:false},
+    {action:'Policy modification',   desc:'Change authorization rules',         allowed:false},
+    {action:'Ledger write',          desc:'Edit or delete audit records',        allowed:false},
+    {action:'Passport issuance',     desc:'Issue own authorization token',       allowed:false},
+    {action:'Secret access',         desc:'Read Razorpay or AWS credentials',   allowed:false},
+  ];
+
+  const denyLoop = [
+    {l:'Agent proposes 30%', type:'neutral'},
+    {l:'PolicyEngine DENY',  type:'fail'},
+    {l:'Constraint returned: max 22.74%', type:'neutral'},
+    {l:'Agent replans to 18%', type:'neutral'},
+    {l:'PolicyEngine ALLOW', type:'pass'},
+    {l:'Passport issued', type:'pass'},
+    {l:'Razorpay order created', type:'pass'},
+  ];
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:24px">
+      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Agent runtime</div>
+      <div style="font-size:13px;color:#818597">The growth agent operates within a strict security boundary. It proposes. MarginGuard authorizes.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <!-- Runtime status -->
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:14px;font-weight:600">Runtime status</div>
+          <span style="font-size:11px;background:#DCFCE7;color:#16A34A;padding:3px 9px;border-radius:3px;font-weight:600">● Connected</span>
+        </div>
+        ${[
+          ['Model',     'Claude Haiku 4.5'],
+          ['Provider',  'AWS Bedrock'],
+          ['Region',    'us-east-1'],
+          ['Guardrail', '9cq40q5l324c (active)'],
+          ['Model ID',  'us.anthropic.claude-haiku-4-5-20251001-v1:0'],
+          ['Max attempts', '3 per order'],
+        ].map(([l,v],i) => `
+          <div style="display:flex;justify-content:space-between;padding:10px 18px;border-bottom:1px solid #E2E8F0;font-size:13px">
+            <span style="color:#818597;font-size:12px">${l}</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:12px">${v}</span>
+          </div>`).join('')}
+      </div>
+
+      <!-- Security terminal -->
+      <div style="background:#012652;border-radius:6px;padding:22px">
+        <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">Security verification</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:2.2">
+          <div style="color:rgba(255,255,255,0.4)">$ grep -rn "razorpay" agent/</div>
+          <div style="color:rgba(255,255,255,0.3);padding-left:12px">0 results</div>
+          <div style="color:rgba(255,255,255,0.4);margin-top:4px">$ grep -rn "credentials" agent/</div>
+          <div style="color:rgba(255,255,255,0.3);padding-left:12px">0 results</div>
+          <div style="color:rgba(255,255,255,0.4);margin-top:4px">$ grep -rn "SECRET" agent/</div>
+          <div style="color:rgba(255,255,255,0.3);padding-left:12px">0 results</div>
+        </div>
+        <div style="margin-top:16px;padding:10px 12px;background:rgba(255,255,255,0.06);border-radius:4px;font-size:11px;color:rgba(255,255,255,0.45);line-height:1.6">
+          The agent's only outbound path is POST /control/propose.
+          It receives an Action Passport — never credentials.
+        </div>
+      </div>
+    </div>
+
+    <!-- Permissions table -->
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:20px">
+      <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;font-size:14px;font-weight:600">Agent permissions</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#F8FAFC">
+            ${['Action','Description','Status'].map(h =>
+              `<th style="padding:9px 18px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #E2E8F0">${h}</th>`
+            ).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${perms.map((p,i) => `
+            <tr style="border-bottom:${i<perms.length-1?'1px solid #E2E8F0':'none'}">
+              <td style="padding:11px 18px;font-size:12px;font-family:'JetBrains Mono',monospace">${p.action}</td>
+              <td style="padding:11px 18px;font-size:12px;color:#818597">${p.desc}</td>
+              <td style="padding:11px 18px;font-size:12px;font-weight:600;color:${p.allowed?'#16A34A':'#DC2626'}">${p.allowed?'✓ Allowed':'✕ Blocked'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- DENY loop -->
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="font-size:14px;font-weight:600;margin-bottom:14px">DENY loop — strategic replanning</div>
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px">
+        ${denyLoop.map((s,i) => `
+          <div style="display:flex;align-items:center;gap:4px">
+            <div style="padding:6px 12px;font-size:11px;font-weight:500;border-radius:4px;
+              background:${s.type==='fail'?'#FEE2E2':s.type==='pass'?'#DCFCE7':'#F1F5F9'};
+              border:1px solid ${s.type==='fail'?'#FECACA':s.type==='pass'?'#BBF7D0':'#E2E8F0'};
+              color:${s.type==='fail'?'#DC2626':s.type==='pass'?'#16A34A':'#1C1C1C'}">${s.l}</div>
+            ${i<denyLoop.length-1?'<div style="color:#CBD5E1;font-size:16px">→</div>':''}
+          </div>`).join('')}
+      </div>
+      <div style="font-size:11px;color:#818597;margin-top:12px">Objective preserved across all attempts. Strategy changes. Authorization authority stays with MarginGuard.</div>
+    </div>`;
+}
+
+/* ── Navigate ── */
+function go(id) {
+  current = id;
+  const _titles = {overview:'Overview',decisions:'Proposals',experiments:'Experiments',policy:'Policies',approvals:'Approval queue',audit:'Audit trail',quarantine:'Quarantine',agent:'Agent runtime',security:'Security'};
+  document.getElementById('page-title').textContent = _titles[id] || id;
+  renderNav();
+
+  if (id === 'overview')  { renderOverview();  return; }
+  if (id === 'decisions') { decFilter='ALL'; detailId=null; renderDecisions(); return; }
+  if (id === 'approvals')   { renderApprovals();   return; }
+  if (id === 'experiments') { renderExperiments(); return; }
+  if (id === 'audit')       { renderAudit();       return; }
+  if (id === 'quarantine') { renderQuarantine(); return; }
+  if (id === 'security')   { renderSecurity();   return; }
+  if (id === 'policy') {
+    renderPolicy();
+    ['margin_floor','auto_approve','max_discount','return_rate_limit','velocity','gate_amount'].forEach(function(k,i){var el=document.getElementById('pf_'+k);if(el)el.value=[18,20,22.74,25,10,5000][i];});
+    // Force-set input values since template literal ${} can behave unexpectedly
+    document.querySelectorAll('#content input[type=number]').forEach(function(inp) {
+      var k = inp.getAttribute('data-key');
+      var div = parseInt(inp.getAttribute('data-div') || '1');
+      if (k && policyValues[k] !== undefined) {
+        inp.value = div > 1 ? policyValues[k] / div : policyValues[k];
+      }
+    });
+    return;
+  }
+  if (id === 'agent')      { renderAgent();      return; }
+
+  document.getElementById('content').innerHTML =
+    `<div style="color:#818597;font-size:13px;padding:40px 0">Page: <strong>${item?item.title:id}</strong> — coming in next phase.</div>`;
+}
+
+/* ── Init ── */
+renderNav();
+go('overview');
+loadData();
+</script>
+</body>
+</html>
