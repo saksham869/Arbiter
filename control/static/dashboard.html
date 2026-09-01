@@ -168,6 +168,20 @@ function loadData() {
 }
 
 /* ── Helpers ── */
+function getDiscount(d) {
+  if (d.discount_pct) return d.discount_pct;
+  if (d.constraint_json) {
+    try { var c=JSON.parse(d.constraint_json); return c.discount_pct||c.max_discount_pct; } catch(e) {}
+  }
+  return null;
+}
+function getBundle(d) {
+  if (d.items && d.items.length) return d.items.map(x=>x.sku).join(' + ');
+  if (d.args_json) {
+    try { var a=JSON.parse(d.args_json); if(a.items) return a.items.map(x=>x.sku).join(' + '); } catch(e) {}
+  }
+  return d.tool||'bundle';
+}
 function inr(p) {
   return '₹' + (p / 100).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 }
@@ -289,12 +303,12 @@ function renderOverview() {
             <tr onclick="go('decisions')" style="border-bottom:${i<7?'1px solid #E2E8F0':'none'};cursor:pointer"
               onmouseenter="this.style.background='#F8FAFC'"
               onmouseleave="this.style.background='transparent'">
-              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500">${row.items.map(x=>x.sku).join(' + ')}</td>
+              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500">${getBundle(row)}</td>
               <td style="padding:11px 16px">${badge(row.decision)}</td>
-              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace">${row.discount_pct}%</td>
+              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace">${getDiscount(row)||'—'}${getDiscount(row)?'%':''}</td>
               <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${row.margin_pct?'#1C1C1C':'#818597'}">${row.margin_pct?row.margin_pct+'%':'—'}</td>
               <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${Number(row.eco_score)>65?'#16A34A':Number(row.eco_score)>35?'#D97706':'#818597'}">${row.eco_score>0?Number(row.eco_score).toFixed(1):'—'}</td>
-              <td style="padding:11px 16px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.ts}</td>
+              <td style="padding:11px 16px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.ts?row.ts.replace('T',' ').slice(0,19):'—'}</td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -343,14 +357,14 @@ function renderDecisions() {
                 style="border-bottom:${i<filtered.length-1?'1px solid #E2E8F0':'none'};cursor:pointer;background:${active?'#EAF0FD':'transparent'};transition:background 0.1s"
                 onmouseenter="if('${row.id}'!==detailId)this.style.background='#F8FAFC'"
                 onmouseleave="if('${row.id}'!==detailId)this.style.background='transparent'">
-                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500;white-space:nowrap">${row.items.map(x=>x.sku).join(' + ')}</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500;white-space:nowrap">${getBundle(row)}</td>
                 <td style="padding:11px 14px">${badge(row.decision)}</td>
-                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace">${row.discount_pct}%</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace">${getDiscount(row)||'—'}${getDiscount(row)?'%':''}</td>
                 <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${row.margin_pct?'#1C1C1C':'#818597'}">${row.margin_pct?row.margin_pct+'%':'—'}</td>
                 <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${Number(row.eco_score)>65?'#16A34A':Number(row.eco_score)>35?'#D97706':'#818597'}">${row.eco_score>0?Number(row.eco_score).toFixed(1):'—'}</td>
-                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;white-space:nowrap">${inr(row.amount)}</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;white-space:nowrap">${row.amount?inr(row.amount):'—'}</td>
                 <td style="padding:11px 14px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.attempt_no}</td>
-                <td style="padding:11px 14px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.ts}</td>
+                <td style="padding:11px 14px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.ts?row.ts.replace('T',' ').slice(0,19):'—'}</td>
               </tr>`;
           }).join('')}
         </tbody>
@@ -372,7 +386,7 @@ function renderDecisions() {
       <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
         <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">AI proposal</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          ${[['Bundle',detailRow.items.map(x=>x.sku).join(' + ')],['Order value',inr(detailRow.amount)],['Discount',detailRow.discount_pct+'%'],['Margin',detailRow.margin_pct?detailRow.margin_pct+'%':'—']].map(([l,v])=>`
+          ${[['Bundle',(detailRow.items||[]).map(x=>x.sku).join(' + ')||detailRow.tool||'—'],['Order value',detailRow.amount?inr(detailRow.amount):'—'],['Discount',getDiscount(detailRow)?getDiscount(detailRow)+'%':'—'],['Margin',detailRow.margin_pct?detailRow.margin_pct+'%':'—']].map(([l,v])=>`
           <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:8px 10px">
             <div style="font-size:11px;color:#818597;margin-bottom:2px">${l}</div>
             <div style="font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500">${v}</div>
@@ -394,7 +408,7 @@ function renderDecisions() {
         </div>
         <div style="font-size:12px;color:#818597">
           ${detailRow.decision==='DENY'?'✕ '+detailRow.reason.replace(/_/g,' '):''}
-          ${detailRow.decision==='GATE'?'⚠ Discount '+detailRow.discount_pct+'% exceeds 20% auto-approve limit':''}
+          ${detailRow.decision==='GATE'?'⚠ Discount '+(getDiscount(detailRow)||'')+'% exceeds 20% auto-approve limit':''}
           ${detailRow.decision==='ALLOW'?'✓ All policy checks passed · attempt '+detailRow.attempt_no:''}
         </div>
       </div>
@@ -555,7 +569,7 @@ function renderReplayModal() {
       <div style="padding:18px 22px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div style="font-size:15px;font-weight:600">Authorization replay</div>
-          <div style="font-size:12px;color:#818597;margin-top:3px">${d.items.map(x=>x.sku).join(' + ')} · Attempt ${d.attempt_no} · ${inr(d.amount)}</div>
+          <div style="font-size:12px;color:#818597;margin-top:3px">${(d.items||[]).map(x=>x.sku).join(' + ')||d.tool||'—'} · Attempt ${d.attempt_no} · ${d.amount?d.amount?inr(d.amount):'—':'—'}</div>
         </div>
         <button onclick="closeReplay()" style="background:none;border:none;font-size:22px;color:#818597;cursor:pointer;line-height:1;padding:0 4px">×</button>
       </div>
@@ -612,8 +626,8 @@ function renderApprovals() {
     ? '<div style="text-align:center;padding:60px 0;color:#818597;font-size:14px">No actions pending review</div>'
     : gates.map(d => {
         // Handle both real API and mock data field shapes
-        const skus = d.items ? d.items.map(x=>x.sku).join(' + ') : (d.tool || 'create_order');
-        const amount = d.amount ? inr(d.amount) : '—';
+        const skus = d.items ? (d.items||[]).map(x=>x.sku).join(' + ')||d.tool||'bundle' : (d.tool || 'create_order');
+        const amount = d.amount ? d.amount?inr(d.amount):'—' : '—';
         const discount = d.discount_pct ? d.discount_pct+'%' : (d.constraint_json ? JSON.parse(d.constraint_json).discount_pct+'%' : '—');
         const margin = d.margin_pct ? d.margin_pct+'%' : '—';
         const eco = d.eco_score > 0 ? Number(d.eco_score).toFixed(1)+'/100' : '—';
@@ -823,7 +837,7 @@ function renderAudit() {
               : row.exec_status === 'UNKNOWN' ? '#FEF3C7' : '#F1F5F9';
             return `
               <tr style="border-bottom:${i<DECISIONS.length-1?'1px solid #E2E8F0':'none'}">
-                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:#818597;white-space:nowrap">${row.ts}</td>
+                <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:#818597;white-space:nowrap">${row.ts?row.ts.replace('T',' ').slice(0,19):'—'}</td>
                 <td style="padding:11px 14px">${badge(row.decision)}</td>
                 <td style="padding:11px 14px;font-size:12px;color:#818597">${row.reason.replace(/_/g,' ')}</td>
                 <td style="padding:11px 14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${row.margin_pct?'#1C1C1C':'#818597'}">${row.margin_pct?row.margin_pct+'%':'—'}</td>
@@ -882,7 +896,7 @@ function renderQuarantine() {
                 <span style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace">${d.id.slice(0,8).toUpperCase()}</span>
                 <span style="font-size:11px;background:#FEE2E2;color:#DC2626;padding:2px 8px;border-radius:3px;font-weight:600;border:1px solid #FECACA">UNKNOWN</span>
               </div>
-              <div style="font-size:12px;color:#818597">${d.items.map(x=>x.sku).join(' + ')} · ${inr(d.amount)} · ${d.ts}</div>
+              <div style="font-size:12px;color:#818597">${(d.items||[]).map(x=>x.sku).join(' + ')||d.tool||'—'} · ${d.amount?d.amount?inr(d.amount):'—':'—'} · ${d.ts}</div>
             </div>
           </div>
 
@@ -1365,7 +1379,7 @@ function go(id) {
   if (id === 'agent')      { renderAgent();      return; }
 
   document.getElementById('content').innerHTML =
-    `<div style="color:#818597;font-size:13px;padding:40px 0">Page: <strong>${item?item.title:id}</strong> — coming in next phase.</div>`;
+    `<div style="color:#818597;font-size:13px;padding:40px 0">Page: <strong>${_titles[id] || id}</strong> — coming in next phase.</div>`;
 }
 
 /* ── Init ── */
