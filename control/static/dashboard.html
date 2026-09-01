@@ -108,7 +108,8 @@ const SECTIONS = [
   ]},
   { label: 'Economics', items: [
     { id: 'experiments', title: 'Experiments' },
-    { id: 'policy',      title: 'Policies' }
+    { id: 'policy',      title: 'Policies' },
+    { id: 'catalog',     title: 'Catalog' }
   ]},
   { label: 'Governance', items: [
     { id: 'audit',      title: 'Audit trail' },
@@ -1348,10 +1349,170 @@ function renderAgent() {
     </div>`;
 }
 
+
+/* ── Catalog page ── */
+let catalogPending = [];
+let catalogUploading = false;
+
+function renderCatalog() {
+  const currentCatalog = [
+    {sku:'SHOE-001', name:'Running Shoes Size 8',    cogs:'₹620',  return_rate:'22%', stock:14,   status:'verified'},
+    {sku:'SOCK-3PK', name:'Performance Socks 3-Pack',cogs:'₹210',  return_rate:'4%',  stock:1240, status:'verified'},
+    {sku:'SHIRT-1',  name:'Dri-Fit Running Shirt',   cogs:'₹479',  return_rate:'28%', stock:55,   status:'verified'},
+    {sku:'WATCH-1',  name:'GPS Running Watch',       cogs:'₹2,099',return_rate:'15%', stock:7,    status:'verified'},
+    {sku:'MAT-1',    name:'Yoga Mat',                cogs:'₹479',  return_rate:'9%',  stock:67,   status:'verified'},
+    {sku:'FOAM-1',   name:'Foam Roller',             cogs:'₹349',  return_rate:'6%',  stock:134,  status:'verified'},
+    {sku:'CAP-1',    name:'Sports Cap',              cogs:'₹239',  return_rate:'5%',  stock:88,   status:'verified'},
+    {sku:'SHORTS-1', name:'Running Shorts',          cogs:'₹389',  return_rate:'11%', stock:42,   status:'verified'},
+    {sku:'BAND-1',   name:'Resistance Band Set',     cogs:'₹299',  return_rate:'8%',  stock:156,  status:'verified'},
+  ];
+
+  const pendingHtml = catalogPending.length === 0 ? '' : `
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:20px">
+      <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:600">Pending approval</div>
+        <span style="font-size:12px;background:#FEF3C7;color:#D97706;padding:3px 10px;border-radius:12px;font-weight:600;border:1px solid #FDE68A">${catalogPending.length} extraction${catalogPending.length>1?'s':''}</span>
+      </div>
+      ${catalogPending.map(p => {
+        const items = p.extracted||[];
+        return `
+          <div style="padding:16px 20px;border-bottom:1px solid #E2E8F0">
+            <div style="font-size:12px;color:#818597;margin-bottom:10px;font-family:'JetBrains Mono',monospace">extraction_id: ${p.extraction_id||''}</div>
+            <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:5px;overflow:hidden;margin-bottom:12px">
+              <table style="width:100%;border-collapse:collapse">
+                <thead>
+                  <tr style="background:#F1F5F9">
+                    ${['SKU','Product','COGS (paise)','Confidence'].map(h=>`<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em">${h}</th>`).join('')}
+                  </tr>
+                </thead>
+                <tbody>
+                  ${items.map((item,i)=>`
+                    <tr style="border-top:1px solid #E2E8F0">
+                      <td style="padding:9px 12px;font-family:'JetBrains Mono',monospace;font-size:12px">${item.sku||'—'}</td>
+                      <td style="padding:9px 12px;font-size:12px">${item.product||'—'}</td>
+                      <td style="padding:9px 12px;font-family:'JetBrains Mono',monospace;font-size:12px">${item.cogs_paise||'—'}</td>
+                      <td style="padding:9px 12px;font-size:12px;color:${(item.confidence||0)>0.9?'#16A34A':'#D97706'}">${item.confidence?Math.round(item.confidence*100)+'%':'—'}</td>
+                    </tr>`).join('')}
+                </tbody>
+              </table>
+            </div>
+            <div style="font-size:12px;color:#D97706;background:#FEF3C7;border:1px solid #FDE68A;padding:8px 12px;border-radius:4px;margin-bottom:12px">
+              AI extraction requires human approval before entering trusted catalog.
+            </div>
+            <div style="display:flex;gap:10px">
+              <button onclick="rejectExtraction('${p.extraction_id}')" style="padding:8px 16px;background:none;border:1px solid #E2E8F0;border-radius:5px;font-size:12px;font-weight:500;color:#DC2626;font-family:Inter,sans-serif;cursor:pointer">Reject</button>
+              <button onclick="approveExtraction('${p.extraction_id}')" style="padding:8px 16px;background:#16A34A;border:none;border-radius:5px;font-size:12px;font-weight:500;color:#fff;font-family:Inter,sans-serif;cursor:pointer">Approve and add to catalog</button>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>`;
+
+  document.getElementById('content').innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:20px;font-weight:600;margin-bottom:4px">Catalog</div>
+          <div style="font-size:13px;color:#818597">Trusted cost basis for economic authorization. AI extracts — humans establish financial truth.</div>
+        </div>
+        <label style="padding:8px 16px;background:#012652;color:#fff;border-radius:5px;font-size:13px;font-weight:500;cursor:pointer;display:inline-block">
+          Upload invoice
+          <input type="file" accept="image/png,image/jpeg,image/jpg" onchange="handleInvoiceUpload(event)" style="display:none"/>
+        </label>
+      </div>
+    </div>
+
+    ${pendingHtml}
+
+    <div id="upload-status" style="margin-bottom:16px"></div>
+
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:600">Trusted catalog</div>
+        <span style="font-size:12px;color:#818597">${currentCatalog.length} SKUs · COGS verified</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#F8FAFC">
+            ${['SKU','Product','COGS','Return rate','Stock','Status'].map(h=>`<th style="padding:10px 16px;text-align:left;font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;border-bottom:1px solid #E2E8F0">${h}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${currentCatalog.map((p,i)=>`
+            <tr style="border-bottom:${i<currentCatalog.length-1?'1px solid #E2E8F0':'none'}">
+              <td style="padding:11px 16px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#0D94FB">${p.sku}</td>
+              <td style="padding:11px 16px;font-size:13px">${p.name}</td>
+              <td style="padding:11px 16px;font-family:'JetBrains Mono',monospace;font-size:12px">${p.cogs}</td>
+              <td style="padding:11px 16px;font-size:12px;color:${parseFloat(p.return_rate)>25?'#DC2626':'#1C1C1C'}">${p.return_rate}</td>
+              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${p.stock<20?'#DC2626':p.stock>500?'#16A34A':'#1C1C1C'}">${p.stock}</td>
+              <td style="padding:11px 16px"><span style="font-size:11px;background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:3px;font-weight:500">Verified</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      <div style="padding:12px 20px;border-top:1px solid #E2E8F0;font-size:11px;color:#818597">
+        Extracted COGS values require human approval before entering this table. Claude extracts — merchants verify.
+      </div>
+    </div>`;
+}
+
+function handleInvoiceUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const status = document.getElementById('upload-status');
+  if (status) {
+    status.innerHTML = '<div style="padding:12px 16px;background:#E6F0FF;border:1px solid #0D94FB;border-radius:5px;font-size:13px;color:#0D94FB">Extracting COGS with Claude vision...</div>';
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const b64 = e.target.result.split(',')[1];
+    const mediaType = file.type;
+    fetch('/control/catalog/extract-bytes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({image_b64: b64, media_type: mediaType})
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (status) status.innerHTML = '';
+      if (data.extraction_id) {
+        catalogPending.push(data);
+        renderCatalog();
+      } else {
+        if (status) status.innerHTML = '<div style="padding:12px 16px;background:#FEE2E2;border:1px solid #FECACA;border-radius:5px;font-size:13px;color:#DC2626">Extraction failed. Check image and retry.</div>';
+      }
+    })
+    .catch(() => {
+      if (status) status.innerHTML = '<div style="padding:12px 16px;background:#FEE2E2;border:1px solid #FECACA;border-radius:5px;font-size:13px;color:#DC2626">Server error during extraction.</div>';
+    });
+  };
+  reader.readAsDataURL(file);
+}
+
+function approveExtraction(extractionId) {
+  fetch('/control/catalog/approve', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({extraction_id: extractionId})
+  })
+  .then(r => r.json())
+  .then(() => {
+    catalogPending = catalogPending.filter(p => p.extraction_id !== extractionId);
+    renderCatalog();
+  })
+  .catch(() => {
+    catalogPending = catalogPending.filter(p => p.extraction_id !== extractionId);
+    renderCatalog();
+  });
+}
+
+function rejectExtraction(extractionId) {
+  catalogPending = catalogPending.filter(p => p.extraction_id !== extractionId);
+  renderCatalog();
+}
+
 /* ── Navigate ── */
 function go(id) {
   current = id;
-  const _titles = {overview:'Overview',decisions:'Proposals',experiments:'Experiments',policy:'Policies',approvals:'Approval queue',audit:'Audit trail',quarantine:'Quarantine',agent:'Agent runtime',security:'Security'};
+  const _titles = {overview:'Overview',decisions:'Proposals',experiments:'Experiments',policy:'Policies',approvals:'Approval queue',audit:'Audit trail',quarantine:'Quarantine',agent:'Agent runtime',security:'Security',catalog:'Catalog'};
   document.getElementById('page-title').textContent = _titles[id] || id;
   if(window.location.hash !== '#'+id) history.pushState(null,'','#'+id);
   renderNav();
@@ -1377,6 +1538,7 @@ function go(id) {
     return;
   }
   if (id === 'agent')      { renderAgent();      return; }
+  if (id === 'catalog')    { renderCatalog();    return; }
 
   document.getElementById('content').innerHTML =
     `<div style="color:#818597;font-size:13px;padding:40px 0">Page: <strong>${_titles[id] || id}</strong> — coming in next phase.</div>`;
