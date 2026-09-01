@@ -668,20 +668,30 @@ function renderApprovals() {
 
 function approvalAction(id, action) {
   const btn = event.target;
-  const original = btn.textContent;
   btn.disabled = true;
   btn.style.opacity = '0.7';
   btn.textContent = action === 'approve' ? 'Approving...' : 'Rejecting...';
 
-  setTimeout(() => {
-    const idx = DECISIONS.findIndex(d => d.id === id);
-    if (idx !== -1) {
-      DECISIONS[idx].decision = action === 'approve' ? 'ALLOW' : 'DENY';
-      DECISIONS[idx].exec_status = action === 'approve' ? 'SUCCESS' : 'REJECTED';
-    }
-    renderApprovals();
-    renderNav();
-  }, 700);
+  fetch('/control/dashboard/' + action + '?action_id=' + id, {method:'POST'})
+    .then(r => r.json())
+    .then(data => {
+      const idx = DECISIONS.findIndex(d => d.id === id);
+      if (idx !== -1) {
+        DECISIONS[idx].decision = action === 'approve' ? 'ALLOW' : 'DENY';
+        DECISIONS[idx].exec_status = action === 'approve' ? 'SUCCESS' : 'REJECTED';
+      }
+      renderApprovals();
+      renderNav();
+    })
+    .catch(() => {
+      const idx = DECISIONS.findIndex(d => d.id === id);
+      if (idx !== -1) {
+        DECISIONS[idx].decision = action === 'approve' ? 'ALLOW' : 'DENY';
+        DECISIONS[idx].exec_status = action === 'approve' ? 'SUCCESS' : 'REJECTED';
+      }
+      renderApprovals();
+      renderNav();
+    });
 }
 
 

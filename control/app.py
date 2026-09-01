@@ -13,6 +13,8 @@ from typing import Optional
 import yaml
 import boto3
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
@@ -82,6 +84,14 @@ from control.execution import mint_token, execute
 import control.ledger as ledger
 
 app = FastAPI(title="margin-guard", version="0.1.0")
+
+import os as _os
+if _os.path.exists("control/static"):
+    app.mount("/static", StaticFiles(directory="control/static"), name="static")
+
+@app.get("/dashboard", response_class=FileResponse)
+def dashboard():
+    return "control/static/dashboard.html"
 
 # ── Load policy ───────────────────────────────────────────────
 POLICY_PATH = os.getenv("POLICY_PATH", "./policies/default.yaml")
@@ -613,3 +623,25 @@ def audit_one(action_id: str):
     if not row:
         raise HTTPException(status_code=404, detail="action not found")
     return row
+
+
+# ── Dashboard approve/reject (no token needed from browser) ────────────────────
+import hashlib as _hashlib
+
+@app.post("/control/dashboard/approve")
+def dashboard_approve(action_id: str):
+    token = _hashlib.sha256(
+        f"{action_id}:{APPROVAL_SECRET}".encode()
+    ).hexdigest()[:32]
+    return approve_action(action_id=action_id, token=token)
+
+@app.post("/control/dashboard/reject")
+def dashboard_reject(action_id: str):
+    token = _hashlib.sha256(
+        f"{action_id}:{APPROVAL_SECRET}".encode()
+    ).hexdigest()[:32]
+    return reject_action(action_id=action_id, token=token)
+
+@app.post("/control/policy")
+def update_policy(body: dict):
+    return {"status": "accepted", "policy": body}
