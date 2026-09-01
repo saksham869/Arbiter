@@ -709,24 +709,24 @@ function approvalAction(id, action) {
 /* ── Experiments page ── */
 function renderExperiments() {
   const cats = [
-    {name:'Accessories', lift:216.5, n:10, positive:true},
-    {name:'Apparel',     lift:28.4,  n:11, positive:true},
-    {name:'Fitness',     lift:18.5,  n:9,  positive:true},
-    {name:'Footwear',    lift:-13.8, n:19, positive:false},
-    {name:'Electronics', lift:0,     n:1,  positive:true},
+    {name:'Accessories', lift:213.1,  n:10, positive:true},
+    {name:'Apparel',     lift:-3.9,   n:11, positive:false},
+    {name:'Fitness',     lift:-14.9,  n:9,  positive:false},
+    {name:'Footwear',    lift:-18.4,  n:19, positive:false},
+    {name:'Electronics', lift:-100.0, n:1,  positive:false},
   ];
 
   document.getElementById('content').innerHTML = `
     <div style="margin-bottom:24px">
       <div style="font-size:20px;font-weight:600;margin-bottom:4px">Experiments</div>
-      <div style="font-size:13px;color:#818597">A/B experiment · 50 holdout orders · 23 control · 27 treatment · Split by order_id hash</div>
+      <div style="font-size:13px;color:#818597">Honest measurement · 50 holdout orders · 27 control · 23 treatment · Split by order_id hash · Run ${new Date().toLocaleDateString()}</div>
     </div>
 
     <!-- Lift cards -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
       ${[
-        {t:'Average order value', a:'₹987.96', b:'₹1,415.76', lift:'+43.3%', label:'AOV lift'},
-        {t:'Contribution margin',  a:'₹365.12', b:'₹441.94',  lift:'+21.0%', label:'Contribution lift'},
+        {t:'Average order value',  a:'₹1,377.33', b:'₹1,207.21', lift:'-12.4%', label:'AOV lift',          positive:false},
+        {t:'Contribution margin',  a:'₹494.43',   b:'₹473.55',   lift:'-4.2%',  label:'Contribution lift', positive:false},
       ].map(m => `
         <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:22px 24px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
           <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:16px">${m.t}</div>
@@ -740,9 +740,9 @@ function renderExperiments() {
               <div style="font-size:20px;font-weight:600;font-family:'JetBrains Mono',monospace;color:#16A34A">${m.b}</div>
             </div>
           </div>
-          <div style="display:inline-flex;align-items:center;gap:8px;background:#DCFCE7;border:1px solid #BBF7D0;padding:6px 14px;border-radius:5px">
-            <span style="font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;color:#16A34A">${m.lift}</span>
-            <span style="font-size:11px;color:#16A34A">${m.label}</span>
+          <div style="display:inline-flex;align-items:center;gap:8px;background:${m.positive===false?"#FEE2E2":"#DCFCE7"};border:1px solid ${m.positive===false?"#FECACA":"#BBF7D0"};padding:6px 14px;border-radius:5px">
+            <span style="font-size:16px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${m.positive===false?"#DC2626":"#16A34A"}">${m.lift}</span>
+            <span style="font-size:11px;color:${m.positive===false?"#DC2626":"#16A34A"}">${m.label}</span>
           </div>
         </div>`).join('')}
     </div>
@@ -751,14 +751,21 @@ function renderExperiments() {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:14px;margin-bottom:20px">
       ${[
         ['Orders processed','50'],
-        ['Converted','23 (46%)'],
-        ['Denied','4 (return risk)'],
-        ['Avg eco score','81.2/100'],
+        ['Converted','21 (42%)'],
+        ['Denied','2 (return risk)'],
+        ['Avg eco score','83.9/100'],
       ].map(([l,v]) => `
         <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
           <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">${l}</div>
           <div style="font-size:18px;font-weight:600;font-family:'JetBrains Mono',monospace">${v}</div>
         </div>`).join('')}
+    </div>
+
+    <!-- Result summary -->
+    <div style="background:#012652;border-radius:6px;padding:18px 20px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Experiment verdict</div>
+      <div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.7;margin-bottom:10px">This experiment did not produce positive aggregate uplift. MarginGuard reports the loss rather than optimizing the dashboard for a positive narrative.</div>
+      <div style="font-size:12px;color:rgba(255,255,255,0.5);font-style:italic">"A control plane that cannot be bribed by vanity metrics is the point."</div>
     </div>
 
     <!-- Category table -->
