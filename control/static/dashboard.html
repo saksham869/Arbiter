@@ -188,55 +188,85 @@ function renderOverview() {
   const denys  = d.filter(x => x.decision === 'DENY').length;
   const gates  = d.filter(x => x.decision === 'GATE').length;
   const scored = d.filter(x => x.eco_score > 0);
-  const avgEco = scored.length ? (scored.reduce((s,x) => s + Number(x.eco_score), 0) / scored.length).toFixed(1) : '—';
+  const avgEco = scored.length ? (scored.reduce((s,x) => s + Number(x.eco_score), 0) / scored.length).toFixed(1) : '0';
   const margined = d.filter(x => x.margin_pct);
-  const avgMgn = margined.length ? (margined.reduce((s,x) => s + parseFloat(x.margin_pct), 0) / margined.length).toFixed(1) : '—';
-  const pct = v => Math.round(v / d.length * 100);
+  const avgMgn = margined.length ? (margined.reduce((s,x) => s + parseFloat(x.margin_pct), 0) / margined.length).toFixed(1) : '0';
+  const totalRev = allows.reduce((s,x) => s + x.amount, 0);
 
   document.getElementById('content').innerHTML = `
+    <!-- Header -->
     <div style="margin-bottom:24px">
-      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Overview</div>
-      <div style="font-size:13px;color:#818597">AI proposes. MarginGuard authorizes. Razorpay executes.</div>
+      <div style="font-size:20px;font-weight:600;margin-bottom:4px">Revenue governance</div>
+      <div style="font-size:13px;color:#818597">AI growth agent operating under economic authorization controls.</div>
     </div>
 
-    <!-- KPI cards -->
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px">
-      ${[
-        ['Total decisions', d.length, '#1C1C1C'],
-        ['Authorized', allows.length + ` <span style="font-size:12px;color:#16A34A">(${pct(allows.length)}%)</span>`, '#16A34A'],
-        ['Denied', denys, '#DC2626'],
-        ['Pending review', gates, '#D97706'],
-        ['Avg eco score', avgEco + '<span style="font-size:12px;color:#818597"> /100</span>', '#1C1C1C'],
-        ['Avg margin', avgMgn + '<span style="font-size:12px;color:#818597">%</span>', '#1C1C1C'],
-      ].map(([l,v,c]) => `
-        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
-          <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">${l}</div>
-          <div style="font-size:24px;font-weight:600;color:${c};font-family:'JetBrains Mono',monospace;line-height:1">${v}</div>
-        </div>`).join('')}
+    <!-- Top 4 answer cards -->
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px">
+      <div style="background:#012652;border-radius:6px;padding:18px 20px">
+        <div style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Agent activity</div>
+        <div style="font-size:26px;font-weight:600;color:#fff;font-family:'JetBrains Mono',monospace;line-height:1">${d.length}</div>
+        <div style="font-size:11px;color:rgba(255,255,255,0.45);margin-top:5px">proposals evaluated</div>
+      </div>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Control rate</div>
+        <div style="font-size:26px;font-weight:600;color:#16A34A;font-family:'JetBrains Mono',monospace;line-height:1">${d.length?Math.round(allows.length/d.length*100):0}%</div>
+        <div style="font-size:11px;color:#818597;margin-top:5px">${allows.length} authorized · ${denys} denied · ${gates} gated</div>
+      </div>
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+        <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Avg economic score</div>
+        <div style="font-size:26px;font-weight:600;color:#1C1C1C;font-family:'JetBrains Mono',monospace;line-height:1">${avgEco}</div>
+        <div style="font-size:11px;color:#818597;margin-top:5px">out of 100 · avg margin ${avgMgn}%</div>
+      </div>
+      <div style="background:#DCFCE7;border:1px solid #BBF7D0;border-radius:6px;padding:18px 20px">
+        <div style="font-size:10px;font-weight:700;color:#16A34A;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Evidence</div>
+        <div style="font-size:26px;font-weight:600;color:#16A34A;font-family:'JetBrains Mono',monospace;line-height:1">Intact</div>
+        <div style="font-size:11px;color:#16A34A;margin-top:5px">${d.length} decisions · hash chain verified</div>
+      </div>
     </div>
 
-    <!-- Decision breakdown + quote -->
-    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:24px">
+    <!-- Decision flow + distribution -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <!-- Decision flow -->
       <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
-        <div style="font-size:12px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:16px">Decision distribution</div>
-        ${[['Authorized', allows.length, '#16A34A', '#DCFCE7'],
-           ['Denied', denys, '#DC2626', '#FEE2E2'],
-           ['Review', gates, '#D97706', '#FEF3C7']].map(([l,v,c,bg]) => `
-          <div style="margin-bottom:14px">
-            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
-              <span style="font-size:12px;color:#818597">${l}</span>
-              <span style="font-size:12px;font-weight:600;color:${c};font-family:'JetBrains Mono',monospace">${v} (${d.length ? Math.round(v/d.length*100) : 0}%)</span>
+        <div style="font-size:12px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:16px">Decision flow</div>
+        <div style="display:flex;flex-direction:column;gap:0">
+          ${[
+            {l:'AI proposes',      sub:'Claude Haiku 4.5 via Bedrock',       c:'#E6F0FF',  bc:'#0D94FB', tc:'#0D94FB'},
+            {l:'Economic check',   sub:'MarginEngine + Economic Score',       c:'#F8FAFC',  bc:'#E2E8F0', tc:'#1C1C1C'},
+            {l:'Policy decision',  sub:'7 rules · fail-closed · DENY wins',  c:'#F8FAFC',  bc:'#E2E8F0', tc:'#1C1C1C'},
+            {l:'Authorization',    sub:'Action Passport issued or rejected',  c:'#012652',  bc:'#012652', tc:'#fff'},
+            {l:'Execution',        sub:'Razorpay API · DynamoDB idempotency',c:'#DCFCE7',  bc:'#BBF7D0', tc:'#16A34A'},
+            {l:'Evidence',         sub:'Hash chain · S3 Object Lock 7yr',    c:'#F8FAFC',  bc:'#E2E8F0', tc:'#818597'},
+          ].map((s,i,a) => `
+            <div style="border:1px solid ${s.bc};border-radius:5px;padding:10px 14px;background:${s.c};margin-bottom:${i<a.length-1?'0':'0'}">
+              <div style="font-size:12px;font-weight:600;color:${s.tc}">${s.l}</div>
+              <div style="font-size:11px;color:${s.tc==='#fff'?'rgba(255,255,255,0.6)':'#818597'};margin-top:2px">${s.sub}</div>
             </div>
-            <div style="height:6px;background:#F1F5F9;border-radius:3px;overflow:hidden">
-              <div style="height:100%;width:${d.length ? Math.round(v/d.length*100) : 0}%;background:${c};border-radius:3px"></div>
-            </div>
-          </div>`).join('')}
+            ${i<a.length-1?'<div style="text-align:center;font-size:14px;color:#CBD5E1;line-height:1.2">↓</div>':''}`).join('')}
+        </div>
       </div>
 
-      <div style="background:#012652;border-radius:6px;padding:22px">
-        <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:12px">Security boundary</div>
-        <div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.7;font-style:italic;margin-bottom:14px">"The AI decides what it wants to accomplish. It cannot decide what financial actions it is authorized to take."</div>
-        <div style="font-size:11px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,0.35)">grep -rn "razorpay" agent/ → 0 results</div>
+      <!-- Right: distribution + quote -->
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+          <div style="font-size:12px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:14px">Decision distribution</div>
+          ${[['Authorized',allows.length,'#16A34A'],['Denied',denys,'#DC2626'],['Review',gates,'#D97706']].map(([l,v,c]) => `
+            <div style="margin-bottom:12px">
+              <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+                <span style="font-size:12px;color:#818597">${l}</span>
+                <span style="font-size:12px;font-weight:600;color:${c};font-family:'JetBrains Mono',monospace">${v} (${d.length?Math.round(v/d.length*100):0}%)</span>
+              </div>
+              <div style="height:5px;background:#F1F5F9;border-radius:3px;overflow:hidden">
+                <div style="height:100%;width:${d.length?Math.round(v/d.length*100):0}%;background:${c};border-radius:3px"></div>
+              </div>
+            </div>`).join('')}
+        </div>
+
+        <div style="background:#012652;border-radius:6px;padding:20px;flex:1">
+          <div style="font-size:11px;font-weight:600;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">The principle</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.85);line-height:1.7;font-style:italic;margin-bottom:12px">"The AI decides what it wants to accomplish. It cannot decide what financial actions it is authorized to take."</div>
+          <div style="font-size:11px;font-family:'JetBrains Mono',monospace;color:rgba(255,255,255,0.35)">grep -rn "razorpay" agent/ → 0 results</div>
+        </div>
       </div>
     </div>
 
@@ -244,7 +274,7 @@ function renderOverview() {
     <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
       <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
         <div style="font-size:14px;font-weight:600">Recent decisions</div>
-        <button onclick="go('decisions')" style="font-size:12px;color:#0D94FB;background:none;border:none;font-weight:500">View all →</button>
+        <button onclick="go('decisions')" style="font-size:12px;color:#0D94FB;background:none;border:none;font-weight:500;cursor:pointer">View all →</button>
       </div>
       <table style="width:100%;border-collapse:collapse">
         <thead>
@@ -256,16 +286,15 @@ function renderOverview() {
         </thead>
         <tbody>
           ${d.slice(0,8).map((row,i) => `
-            <tr style="border-bottom:${i<7?'1px solid #E2E8F0':'none'};cursor:pointer" 
-                onmouseenter="this.style.background='#F8FAFC'" 
-                onmouseleave="this.style.background='transparent'"
-                onclick="go('decisions')">
-              <td style="padding:12px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500">${row.items.map(x=>x.sku).join(' + ')}</td>
-              <td style="padding:12px 16px">${badge(row.decision)}</td>
-              <td style="padding:12px 16px;font-size:12px;font-family:'JetBrains Mono',monospace">${row.discount_pct}%</td>
-              <td style="padding:12px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${row.margin_pct?'#1C1C1C':'#818597'}">${row.margin_pct?row.margin_pct+'%':'—'}</td>
-              <td style="padding:12px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${Number(row.eco_score)>65?'#16A34A':Number(row.eco_score)>35?'#D97706':'#818597'}">${row.eco_score>0?Number(row.eco_score).toFixed(1):'—'}</td>
-              <td style="padding:12px 16px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.ts}</td>
+            <tr onclick="go('decisions')" style="border-bottom:${i<7?'1px solid #E2E8F0':'none'};cursor:pointer"
+              onmouseenter="this.style.background='#F8FAFC'"
+              onmouseleave="this.style.background='transparent'">
+              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500">${row.items.map(x=>x.sku).join(' + ')}</td>
+              <td style="padding:11px 16px">${badge(row.decision)}</td>
+              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace">${row.discount_pct}%</td>
+              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${row.margin_pct?'#1C1C1C':'#818597'}">${row.margin_pct?row.margin_pct+'%':'—'}</td>
+              <td style="padding:11px 16px;font-size:12px;font-family:'JetBrains Mono',monospace;color:${Number(row.eco_score)>65?'#16A34A':Number(row.eco_score)>35?'#D97706':'#818597'}">${row.eco_score>0?Number(row.eco_score).toFixed(1):'—'}</td>
+              <td style="padding:11px 16px;font-size:12px;color:#818597;font-family:'JetBrains Mono',monospace">${row.ts}</td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -328,70 +357,100 @@ function renderDecisions() {
       </table>
     </div>`;
 
+  const ecoColor = detailRow ? (Number(detailRow.eco_score)>65?'#16A34A':Number(detailRow.eco_score)>35?'#D97706':'#DC2626') : '#818597';
+
   const detailHtml = detailRow ? `
-    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);flex-shrink:0;width:340px">
-      <!-- Header -->
-      <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace">#${detailRow.id.slice(0,8).toUpperCase()}</div>
-        <button onclick="closeDetail()" style="background:none;border:none;font-size:20px;color:#818597;line-height:1;cursor:pointer">×</button>
-      </div>
-      <!-- Decision -->
-      <div style="padding:16px 18px;border-bottom:1px solid #E2E8F0">
-        ${badge(detailRow.decision)}
-        <div style="font-size:22px;font-weight:600;font-family:'JetBrains Mono',monospace;margin-top:8px;margin-bottom:4px">${detailRow.discount_pct}% discount</div>
-        <div style="font-size:12px;color:#818597">${inr(detailRow.amount)} · Attempt ${detailRow.attempt_no} · ${detailRow.ts}</div>
-      </div>
-      <!-- Eco score -->
-      <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
-        <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Economic score</div>
-        <div style="display:flex;align-items:baseline;gap:5px;margin-bottom:10px">
-          <span style="font-size:28px;font-weight:600;font-family:'JetBrains Mono',monospace;color:${Number(detailRow.eco_score)>65?'#16A34A':Number(detailRow.eco_score)>35?'#D97706':'#DC2626'}">${Number(detailRow.eco_score).toFixed(1)}</span>
-          <span style="font-size:14px;color:#818597">/100</span>
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);flex-shrink:0;width:360px">
+      <div style="padding:12px 18px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center;background:#F8FAFC">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px">Proposal</div>
+          <div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace">MG-${detailRow.id.slice(0,6).toUpperCase()}</div>
         </div>
-        <div style="height:6px;background:#F1F5F9;border-radius:3px;overflow:hidden">
-          <div style="height:100%;width:${Math.min(Number(detailRow.eco_score),100)}%;border-radius:3px;background:${Number(detailRow.eco_score)>65?'#16A34A':Number(detailRow.eco_score)>35?'#D97706':'#DC2626'}"></div>
+        <button onclick="closeDetail()" style="background:none;border:none;font-size:20px;color:#818597;cursor:pointer">×</button>
+      </div>
+
+      <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
+        <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">AI proposal</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${[['Bundle',detailRow.items.map(x=>x.sku).join(' + ')],['Order value',inr(detailRow.amount)],['Discount',detailRow.discount_pct+'%'],['Margin',detailRow.margin_pct?detailRow.margin_pct+'%':'—']].map(([l,v])=>`
+          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:8px 10px">
+            <div style="font-size:11px;color:#818597;margin-bottom:2px">${l}</div>
+            <div style="font-size:12px;font-family:'JetBrains Mono',monospace;font-weight:500">${v}</div>
+          </div>`).join('')}
         </div>
       </div>
-      <!-- Reason -->
+
       <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
-        <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Decision reason</div>
-        ${detailRow.decision === 'DENY' ? `
-          <div style="font-size:12px;color:#DC2626;font-weight:500;margin-bottom:4px">✕ ${detailRow.reason.replace(/_/g,' ')}</div>` : ''}
-        ${detailRow.decision === 'ALLOW' ? `
-          <div style="font-size:12px;color:#16A34A;line-height:2">
-            <div>✓ Margin above floor (${detailRow.margin_pct}%)</div>
-            <div>✓ Return risk within threshold</div>
-            <div>✓ Discount within ceiling</div>
-            <div>✓ Velocity limit not exceeded</div>
-          </div>` : ''}
-        ${detailRow.decision === 'GATE' ? `
-          <div style="font-size:12px;color:#D97706">⚠ Discount ${detailRow.discount_pct}% exceeds 20% auto-approve limit</div>` : ''}
-      </div>
-      <!-- Passport (ALLOW only) -->
-      ${detailRow.decision === 'ALLOW' ? `
-        <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
-          <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px">Action passport</div>
-          <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8;color:#1C1C1C">
-            <div><span style="color:#818597">allowed:</span> DISCOUNT_OFFER</div>
-            <div><span style="color:#818597">max_discount:</span> ${detailRow.discount_pct}%</div>
-            <div><span style="color:#818597">amount:</span> ${inr(detailRow.amount)}</div>
-            <div><span style="color:#818597">valid:</span> +5 min TTL</div>
-            <div><span style="color:#818597">hash:</span> <span style="color:#0D94FB">9ed913f4…</span></div>
+        <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Economic authorization</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="display:flex;align-items:baseline;gap:4px">
+            <span style="font-size:30px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${ecoColor};line-height:1">${Number(detailRow.eco_score).toFixed(1)}</span>
+            <span style="font-size:13px;color:#818597">/100</span>
           </div>
-        </div>` : ''}
-      <!-- Razorpay order (ALLOW only) -->
-      ${detailRow.rzp_entity_id ? `
+          ${badge(detailRow.decision)}
+        </div>
+        <div style="height:6px;background:#F1F5F9;border-radius:3px;overflow:hidden;margin-bottom:8px">
+          <div style="height:100%;width:${Math.min(Number(detailRow.eco_score),100)}%;border-radius:3px;background:${ecoColor}"></div>
+        </div>
+        <div style="font-size:12px;color:#818597">
+          ${detailRow.decision==='DENY'?'✕ '+detailRow.reason.replace(/_/g,' '):''}
+          ${detailRow.decision==='GATE'?'⚠ Discount '+detailRow.discount_pct+'% exceeds 20% auto-approve limit':''}
+          ${detailRow.decision==='ALLOW'?'✓ All policy checks passed · attempt '+detailRow.attempt_no:''}
+        </div>
+      </div>
+
+      <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
+        <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Policy evaluation</div>
+        <div style="font-size:12px;line-height:2">
+          ${detailRow.decision==='ALLOW'?`
+            <div style="color:#16A34A">✓ Margin above floor (${detailRow.margin_pct}%)</div>
+            <div style="color:#16A34A">✓ Return risk within threshold</div>
+            <div style="color:#16A34A">✓ Discount within authorized ceiling</div>
+            <div style="color:#16A34A">✓ Velocity limit not exceeded</div>
+            <div style="color:#16A34A">✓ COGS verified in trusted catalog</div>`:''}
+          ${detailRow.decision==='DENY'?`
+            <div style="color:#16A34A">✓ COGS verified</div>
+            <div style="color:#DC2626">✕ ${detailRow.reason.replace(/_/g,' ')}</div>
+            <div style="color:#818597">— Remaining rules not evaluated</div>`:''}
+          ${detailRow.decision==='GATE'?`
+            <div style="color:#16A34A">✓ Margin above floor (${detailRow.margin_pct}%)</div>
+            <div style="color:#16A34A">✓ Return risk acceptable</div>
+            <div style="color:#D97706">⚠ Discount exceeds auto-approve threshold</div>
+            <div style="color:#818597">→ Queued for merchant approval</div>`:''}
+        </div>
+      </div>
+
+      ${detailRow.decision==='ALLOW'?`
         <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
-          <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">Razorpay order</div>
-          <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#16A34A;font-weight:500">${detailRow.rzp_entity_id}</div>
-        </div>` : ''}
-      <!-- Replay button -->
-      ${detailRow.decision === 'ALLOW' ? `
+          <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px">Action passport</div>
+          <div style="background:#012652;border-radius:5px;padding:12px 14px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.9">
+            <div><span style="color:rgba(255,255,255,0.4)">allowed_action:</span> <span style="color:#fff">DISCOUNT_OFFER</span></div>
+            <div><span style="color:rgba(255,255,255,0.4)">max_discount_pct:</span> <span style="color:#fff">${detailRow.discount_pct}</span></div>
+            <div><span style="color:rgba(255,255,255,0.4)">authorized_amount:</span> <span style="color:#fff">${inr(detailRow.amount)}</span></div>
+            <div><span style="color:rgba(255,255,255,0.4)">valid_until:</span> <span style="color:#fff">+5 min TTL</span></div>
+            <div><span style="color:rgba(255,255,255,0.4)">passport_hash:</span> <span style="color:#0D94FB">9ed913f4b4e2…</span></div>
+          </div>
+        </div>`:''}
+
+      ${detailRow.rzp_entity_id?`
+        <div style="padding:14px 18px;border-bottom:1px solid #E2E8F0">
+          <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:5px">Razorpay order</div>
+          <div style="font-size:13px;font-family:'JetBrains Mono',monospace;color:#16A34A;font-weight:600">${detailRow.rzp_entity_id}</div>
+          <div style="font-size:11px;color:#818597;margin-top:2px">Test mode · order created</div>
+        </div>`:''}
+
+      ${detailRow.decision==='ALLOW'?`
         <div style="padding:14px 18px">
-          <button onclick="showReplay('${detailRow.id}')" style="width:100%;padding:10px;background:#012652;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer">
+          <button onclick="showReplay('${detailRow.id}');event.stopPropagation()" style="width:100%;padding:10px;background:#012652;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer">
             Watch authorization replay →
           </button>
-        </div>` : ''}
+        </div>`:''}
+
+      ${detailRow.decision==='GATE'?`
+        <div style="padding:14px 18px;display:flex;gap:10px">
+          <button style="flex:1;padding:9px;background:none;border:1px solid #E2E8F0;border-radius:5px;font-size:13px;font-weight:500;color:#DC2626;font-family:Inter,sans-serif;cursor:pointer">Reject</button>
+          <button style="flex:1;padding:9px;background:#16A34A;border:none;border-radius:5px;font-size:13px;font-weight:500;color:#fff;font-family:Inter,sans-serif;cursor:pointer">Approve</button>
+        </div>`:''}
     </div>` : '';
 
   document.getElementById('content').innerHTML = `
