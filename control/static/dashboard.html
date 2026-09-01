@@ -606,54 +606,50 @@ function closeReplay() {
 
 /* ── Approvals page ── */
 function renderApprovals() {
-  const gates = DECISIONS.filter(d => d.decision === 'GATE');
+  const gates = DECISIONS.filter(d => d.decision === 'GATE' && d.exec_status === 'NOT_RUN');
 
   const cards = gates.length === 0
     ? '<div style="text-align:center;padding:60px 0;color:#818597;font-size:14px">No actions pending review</div>'
-    : gates.map(d => `
+    : gates.map(d => {
+        // Handle both real API and mock data field shapes
+        const skus = d.items ? d.items.map(x=>x.sku).join(' + ') : (d.tool || 'create_order');
+        const amount = d.amount ? inr(d.amount) : '—';
+        const discount = d.discount_pct ? d.discount_pct+'%' : (d.constraint_json ? JSON.parse(d.constraint_json).discount_pct+'%' : '—');
+        const margin = d.margin_pct ? d.margin_pct+'%' : '—';
+        const eco = d.eco_score > 0 ? Number(d.eco_score).toFixed(1)+'/100' : '—';
+        return `
         <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
             <div>
-              <div style="font-size:20px;font-weight:600;font-family:'JetBrains Mono',monospace">${inr(d.amount)}</div>
-              <div style="font-size:12px;color:#818597;margin-top:3px;font-family:'JetBrains Mono',monospace">${d.items.map(x=>x.sku).join(' + ')}</div>
+              <div style="font-size:14px;font-weight:600;font-family:'JetBrains Mono',monospace">MG-${d.id.slice(0,8).toUpperCase()}</div>
+              <div style="font-size:12px;color:#818597;margin-top:3px">${skus}</div>
+              <div style="font-size:11px;color:#818597;margin-top:2px;font-family:'JetBrains Mono',monospace">${d.ts ? d.ts.replace('T',' ').slice(0,19) : ''}</div>
             </div>
             ${badge('GATE')}
           </div>
 
-          <!-- Stats -->
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px">
-            ${[['Discount',d.discount_pct+'%'],['Margin',d.margin_pct?d.margin_pct+'%':'—'],['Eco score',Number(d.eco_score).toFixed(1)+'/100']].map(([l,v])=>`
+            ${[['Discount',discount],['Margin',margin],['Eco score',eco]].map(([l,v])=>`
               <div>
                 <div style="font-size:11px;color:#818597;margin-bottom:3px;font-weight:500">${l}</div>
                 <div style="font-size:14px;font-weight:600;font-family:'JetBrains Mono',monospace">${v}</div>
               </div>`).join('')}
           </div>
 
-          <!-- Reason -->
           <div style="font-size:12px;color:#D97706;background:#FEF3C7;border:1px solid #FDE68A;padding:8px 12px;border-radius:5px;margin-bottom:14px">
-            ${d.reason.replace(/_/g,' ')}
+            ${d.reason ? d.reason.replace(/_/g,' ') : 'Requires merchant approval'}
           </div>
 
-          <!-- Why gated explanation -->
-          <div style="font-size:12px;color:#818597;margin-bottom:14px;line-height:1.6">
-            Discount of ${d.discount_pct}% exceeds the 20% auto-authorize threshold.
-            Amount ${inr(d.amount)} requires merchant decision before execution.
-            Action is queued in SQS and email notification was sent.
-          </div>
-
-          <!-- Passport preview -->
           <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:4px;padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.8;margin-bottom:14px">
             <div><span style="color:#818597">action_id:</span> ${d.id}</div>
-            <div><span style="color:#818597">eco_score:</span> ${Number(d.eco_score).toFixed(1)}/100</div>
             <div><span style="color:#818597">queued:</span> <span style="color:#16A34A">SQS + SNS notified</span></div>
           </div>
 
-          <!-- Actions -->
           <div style="display:flex;gap:10px">
             <button onclick="approvalAction('${d.id}','reject')" style="flex:1;padding:9px;background:none;border:1px solid #E2E8F0;border-radius:5px;font-size:13px;font-weight:500;color:#DC2626;font-family:Inter,sans-serif;cursor:pointer">Reject</button>
             <button onclick="approvalAction('${d.id}','approve')" style="flex:1;padding:9px;background:#16A34A;border:none;border-radius:5px;font-size:13px;font-weight:500;color:#fff;font-family:Inter,sans-serif;cursor:pointer">Approve</button>
           </div>
-        </div>`).join('');
+        </div>`;}).join('');
 
   document.getElementById('content').innerHTML = `
     <div style="margin-bottom:20px">
@@ -1382,10 +1378,6 @@ renderNav();
   window.addEventListener('popstate',function(){
     var pg=window.location.hash.replace('#','');
     if(valid.indexOf(pg)===-1)pg='overview';
-    current=pg;
-    var t={overview:'Overview',decisions:'Proposals',experiments:'Experiments',policy:'Policies',approvals:'Approval queue',audit:'Audit trail',quarantine:'Quarantine',agent:'Agent runtime',security:'Security'};
-    document.getElementById('page-title').textContent=t[pg]||pg;
-    renderNav();
     go(pg);
   });
 })();
