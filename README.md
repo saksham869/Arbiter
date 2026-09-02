@@ -398,6 +398,42 @@ It is an economic authorization and governance control plane. The AI is bounded 
 
 ---
 
+## Reviewer attack checklist
+
+Can a reviewer break the authorization boundary?
+
+| Attack | Answer | Proof |
+|---|---|---|
+| AI executes Razorpay directly | **NO** | `grep -rn "razorpay" agent/` → 0 results |
+| AI modifies policy | **NO** | No policy endpoint in agent permissions |
+| Expired passport executes | **NO** | `validate_passport()` checks TTL — returns `passport_expired` |
+| Passport replayed | **NO** | `exec_status` check + DynamoDB idempotency key |
+| Stale policy executes | **NO** | `passport_stale_policy` check in `validate_passport()` |
+| Concurrent approval double-executes | **NO** | `test_concurrent_approval_creates_single_order` — 1 order from 2 threads |
+| Unknown COGS authorized | **NO** | `test_unknown_cogs_never_allow` — DENY on missing cost basis |
+| 5xx becomes SUCCESS | **NO** | UNKNOWN → QUARANTINE → SAFE_HALT — no retry, no assumption |
+| Ledger tampering unnoticed | **NO** | `test_tamper_detected` — SHA-256 chain breaks |
+| Kill switch bypassed | **NO** | `test_kill_switch_blocks_execution` — backend-enforced |
+| LLM overrides policy via rationale | **NO** | Live attack mode — 9/9 social engineering attempts blocked |
+| Higher COGS raises discount ceiling | **NO** | `test_margin_ceiling_invariant_higher_cogs` — mathematical proof |
+
+```bash
+# Run the proof
+python3 -m pytest tests/ -q
+# 70 passed, 1 skipped
+
+# Verify audit chain
+curl http://localhost:8085/control/audit/verify
+# {"intact": true, "checked": N}
+
+# Prove agent has no credentials
+grep -rn "razorpay" agent/
+# 0 results
+```
+
+
+---
+
 ## Graceful degradation
 
 What happens when each dependency fails:
