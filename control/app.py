@@ -85,6 +85,9 @@ import control.ledger as ledger
 
 app = FastAPI(title="margin-guard", version="0.1.0")
 
+# ── Kill switch state ──────────────────────────────────────────────────────────
+_kill_switch_active = False
+
 import os as _os
 if _os.path.exists("control/static"):
     app.mount("/static", StaticFiles(directory="control/static"), name="static")
@@ -548,6 +551,18 @@ def propose(req: ProposalIn):
         ttl_minutes=5,
     )
 
+    # Kill switch: pause autonomous execution
+    if _kill_switch_active:
+        _emit_metrics("GATE", decision.margin_pct or 0, eco.score, req.action.discount_pct)
+        return {
+            "action_id":  entry.id,
+            "decision":   "GATE",
+            "reason":     "kill_switch_active",
+            "margin_pct": decision.margin_pct,
+            "economic_score": {"score": eco.score, "decision": eco.decision},
+            "message":    "Autonomous execution paused. Approve manually.",
+        }
+
     result = execute(entry.id, token, "create_order", args, passport=passport)
 
     _emit_metrics("ALLOW", decision.margin_pct or 0, eco.score, req.action.discount_pct)
@@ -645,3 +660,22 @@ def dashboard_reject(action_id: str):
 @app.post("/control/policy")
 def update_policy(body: dict):
     return {"status": "accepted", "policy": body}
+
+
+# ── Kill switch endpoints ───────────────────────────────────────────────────────
+@app.get("/control/kill-switch")
+def get_kill_switch():
+    global _kill_switch_active
+    return {"active": _kill_switch_active}
+
+@app.post("/control/kill-switch/activate")
+def activate_kill_switch():
+    global _kill_switch_active
+    _kill_switch_active = True
+    return {"active": True, "message": "Autonomous execution paused. All actions now require human approval."}
+
+@app.post("/control/kill-switch/deactivate")
+def deactivate_kill_switch():
+    global _kill_switch_active
+    _kill_switch_active = False
+    return {"active": False, "message": "Autonomous execution resumed."}

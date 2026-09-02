@@ -1252,6 +1252,30 @@ function savePolicy() {
 
 /* ── Agent Runtime page ── */
 function renderAgent() {
+  // Fetch real kill switch status
+  fetch('/control/kill-switch')
+    .then(r => r.json())
+    .then(d => {
+      var btn = document.getElementById('ks-btn');
+      var dot = document.getElementById('ks-dot');
+      var status = document.getElementById('ks-status');
+      if (!btn) return;
+      if (d.active) {
+        dot.style.background = '#DC2626';
+        status.textContent = 'PAUSED — all actions require human approval';
+        btn.textContent = 'Resume autonomous execution';
+        btn.style.background = '#16A34A';
+        btn.onclick = function(){ toggleKillSwitch(false); };
+      } else {
+        dot.style.background = '#16A34A';
+        status.textContent = 'ACTIVE — agent operating autonomously within policy';
+        btn.textContent = 'Pause autonomous execution';
+        btn.style.background = '#DC2626';
+        btn.onclick = function(){ toggleKillSwitch(true); };
+      }
+    })
+    .catch(() => {});
+
   const perms = [
     {action:'POST /control/propose', desc:'Submit proposals to control plane', allowed:true},
     {action:'GET /control/audit',    desc:'View audit log (read only)',         allowed:true},
@@ -1315,6 +1339,41 @@ function renderAgent() {
           It receives an Action Passport — never credentials.
         </div>
       </div>
+    </div>
+
+    <!-- Kill switch panel -->
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">Autonomous execution</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="ks-dot" style="width:10px;height:10px;border-radius:50%;background:#16A34A;display:inline-block;flex-shrink:0"></span>
+            <span id="ks-status" style="font-size:13px;color:#818597">Loading...</span>
+          </div>
+        </div>
+        <button id="ks-btn" onclick="toggleKillSwitch(true)" style="padding:9px 20px;background:#DC2626;color:#fff;border:none;border-radius:5px;font-size:13px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer">
+          Pause autonomous execution
+        </button>
+      </div>
+      <div style="font-size:12px;color:#818597;margin-top:10px;padding:10px 14px;background:#F8FAFC;border-radius:4px;border:1px solid #E2E8F0">
+        When paused: AI can still analyze and propose. All ALLOW decisions become GATE requiring human approval. No autonomous Razorpay execution.
+      </div>
+    </div>
+
+    <!-- Autonomy levels -->
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px 20px;margin-bottom:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="font-size:14px;font-weight:600;margin-bottom:14px">Autonomy level</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+        ${['L0 Observe','L1 Recommend','L2 Auto-propose','L3 Auto-execute','L4 Full autonomy'].map((l,i) => `
+          <div style="padding:10px 8px;border-radius:5px;text-align:center;font-size:11px;font-weight:${i===3?'600':'400'};
+            background:${i===3?'#012652':'#F8FAFC'};
+            color:${i===3?'#fff':'#818597'};
+            border:1px solid ${i===3?'#012652':'#E2E8F0'}">
+            ${l}
+            ${i===3?'<div style="font-size:10px;margin-top:3px;opacity:0.7">Current</div>':''}
+          </div>`).join('')}
+      </div>
+      <div style="font-size:12px;color:#818597;margin-top:10px">MarginGuard makes agent autonomy configurable, not binary. Current level: L3 — auto-execute bounded actions within policy.</div>
     </div>
 
     <!-- Permissions table -->
@@ -1514,6 +1573,18 @@ function approveExtraction(extractionId) {
 function rejectExtraction(extractionId) {
   catalogPending = catalogPending.filter(p => p.extraction_id !== extractionId);
   renderCatalog();
+}
+
+/* ── Kill switch toggle ── */
+function toggleKillSwitch(activate) {
+  var endpoint = activate ? '/control/kill-switch/activate' : '/control/kill-switch/deactivate';
+  fetch(endpoint, {method: 'POST'})
+    .then(r => r.json())
+    .then(d => {
+      // Re-render agent page to show new status
+      renderAgent();
+    })
+    .catch(() => {});
 }
 
 /* ── Navigate ── */
