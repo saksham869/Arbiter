@@ -812,6 +812,26 @@ function renderExperiments() {
         </div>`).join('')}
     </div>
 
+    <!-- Integrity panel -->
+    <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Experiment integrity</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+        ${[
+          {l:'Randomization',   v:'ORDER_ID hash',      sub:'Deterministic split — same order always in same group'},
+          {l:'Statistical power',v:'LOW',               sub:'n=50 is underpowered. Results are directional only.', warn:true},
+          {l:'Metric definition',v:'Contribution margin',sub:'Not AOV — we measure economic value, not revenue'},
+          {l:'Blinding',        v:'Partial',            sub:'Agent unblinded. Customer blind to experiment.'},
+          {l:'Sample size',     v:'50 orders',          sub:'Below threshold for statistical significance (p<0.05)'},
+          {l:'Interpretation',  v:'Directional',        sub:'Cannot claim causal effect without larger sample'},
+        ].map(s => `
+          <div style="background:#F8FAFC;border:1px solid ${s.warn?'#FDE68A':'#E2E8F0'};border-radius:5px;padding:10px 12px">
+            <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">${s.l}</div>
+            <div style="font-size:13px;font-weight:600;color:${s.warn?'#D97706':'#1C1C1C'}">${s.v}</div>
+            <div style="font-size:11px;color:#818597;margin-top:3px;line-height:1.4">${s.sub}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
     <!-- Honesty note -->
     <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:6px;padding:14px 18px;font-size:13px;color:#92400E;line-height:1.6">
       <strong>Note on methodology:</strong> The footwear loss of -13.8% is shown, not hidden.
