@@ -149,7 +149,7 @@
 
 | Control | Implementation | Tested |
 |---|---|---|
-| Prompt injection screening | Bedrock Guardrails 9cq40q5l324c | ✓ adversary test 1 |
+| Prompt injection screening | Bedrock Guardrails 9cq40q5l324c | ✓ adversary test 1 + 3 LLM live |
 | Deterministic authorization | PolicyEngine (no LLM in auth path) | ✓ test_policy.py |
 | COGS integrity | Trusted catalog only, human approval | ✓ adversary test 3 |
 | Credential isolation | Agent has no Razorpay access; `grep -rn "razorpay" agent/ → 0` | ✓ verified |
@@ -163,6 +163,12 @@
 | Fail-closed policy | Corrupt/missing policy → DENY | ✓ adversary test 6 |
 | Quarantine on 5xx | UNKNOWN state, no retry, no assumption | ✓ adversary test 7 |
 | Secrets management | Razorpay credentials in AWS Secrets Manager | ✓ deployed |
+| Policy versioning | Passport binds policy_version — stale → rejected | ✓ passport_stale_policy |
+| TOCTOU revalidation | Re-checks COGS+policy at execution time | ✓ implemented in propose() |
+| GATE re-authorization | Human approval triggers fresh economics check | ✓ approve_action() |
+| Concurrent idempotency | Two simultaneous approvals → one Razorpay order | ✓ test_concurrent_approval |
+| Economic invariants | Higher COGS/floor never raises ceiling | ✓ test_margin_ceiling_invariant |
+| Live attack mode | 9/9 social engineering attempts blocked live | ✓ Security page |
 
 ---
 
