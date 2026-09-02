@@ -598,6 +598,58 @@ def propose(req: ProposalIn):
             "message":    "Autonomous execution paused. Approve manually.",
         }
 
+    # ── TOCTOU revalidation ──────────────────────────────────────
+    # Re-check economics at execution time. COGS or policy may have changed.
+    try:
+        _cat_now = _load_catalog()
+        _pol_now = _load_policy()
+        _eng_now = _build_engine(_pol_now, _cat_now)
+        # Revalidate using current catalog + same discount
+        # Re-enrich items with current catalog COGS
+        _line_items_now = []
+        _unknown_sku = None
+        for _it in req.action.items:
+            _cogs_now = _cat_now.get(_it.sku, {}).get("cogs_paise")
+            if _cogs_now is None:
+                _unknown_sku = _it.sku
+                break
+            from control.margin import LineItem as _LI
+            _line_items_now.append(_LI(
+                sku=_it.sku,
+                quantity=_it.quantity,
+                list_price_paise=_it.list_price_paise,
+                cogs_paise=_cogs_now,
+            ))
+        if _unknown_sku:
+            return {
+                "action_id": entry.id,
+                "decision":  "DENY",
+                "reason":    "toctou_unknown_cogs",
+                "detail":    f"COGS for {_unknown_sku} no longer in trusted catalog",
+                "message":   "Catalog changed between authorization and execution.",
+            }
+        _list_total_now = sum(i.list_price_paise * i.quantity for i in _line_items_now)
+        _paid_now = int(_list_total_now * (1 - req.action.discount_pct / 100))
+        _dec_now = _eng_now.check(
+            items=_line_items_now,
+            paid_paise=_paid_now,
+            list_total_paise=_list_total_now,
+        )
+        if _dec_now.result == "DENY":
+            _emit_metrics("DENY", _dec_now.margin_pct or 0, eco.score, req.action.discount_pct)
+            return {
+                "action_id": entry.id,
+                "decision":  "DENY",
+                "reason":    "toctou_revalidation_failed",
+                "detail":    _dec_now.reason,
+                "margin_pct": _dec_now.margin_pct,
+                "message":   "Economics changed between authorization and execution. Replan required.",
+            }
+    except Exception as _toctou_err:
+        import logging
+        logging.getLogger("margin-guard").warning("TOCTOU revalidation error: %s", _toctou_err)
+    # ─────────────────────────────────────────────────────────────
+
     result = execute(entry.id, token, "create_order", args, passport=passport)
 
     _emit_metrics("ALLOW", decision.margin_pct or 0, eco.score, req.action.discount_pct)
