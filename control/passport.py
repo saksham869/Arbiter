@@ -108,6 +108,18 @@ def issue_passport(
     )
 
 
+def _current_policy_version() -> str:
+    """Load current policy version from disk."""
+    try:
+        import yaml, os
+        path = os.getenv("POLICY_PATH", "./policies/default.yaml")
+        with open(path) as f:
+            pol = yaml.safe_load(f)
+        return str(pol.get("version", "1"))
+    except Exception:
+        return "1"
+
+
 def validate_passport(passport: ActionPassport) -> tuple[bool, str]:
     """
     Validate a Passport before execution.
@@ -123,7 +135,12 @@ def validate_passport(passport: ActionPassport) -> tuple[bool, str]:
     except ValueError:
         return False, "passport_invalid_timestamp"
 
-    # 2. Check hash integrity
+    # 2. Check policy version — passport issued under old policy is invalid
+    current_version = _current_policy_version()
+    if passport.policy_version != current_version:
+        return False, f"passport_stale_policy:{passport.policy_version}→{current_version}"
+
+    # 3. Check hash integrity
     data = {
         "action_id":        passport.action_id,
         "jti":              passport.jti,
