@@ -448,9 +448,23 @@ function renderDecisions() {
             <div style="color:#16A34A">✓ Velocity limit not exceeded</div>
             <div style="color:#16A34A">✓ COGS verified in trusted catalog</div>`:''}
           ${detailRow.decision==='DENY'?`
-            <div style="color:#16A34A">✓ COGS verified</div>
-            <div style="color:#DC2626">✕ ${detailRow.reason.replace(/_/g,' ')}</div>
-            <div style="color:#818597">— Remaining rules not evaluated</div>`:''}
+            ${detailRow.reason==='unknown_cogs'?
+              '<div style="color:#DC2626">✕ COGS not in trusted catalog — agent cannot inject cost basis</div>' :
+            detailRow.reason==='return_risk'?
+              '<div style="color:#DC2626">✕ Return rate exceeds limit — MDR non-refundable risk</div>' :
+            detailRow.reason==='margin_floor'?
+              '<div style="color:#DC2626">✕ Margin floor violation</div>' +
+              '<div style="font-family:JetBrains Mono,monospace;font-size:11px;color:#DC2626;background:#FEE2E2;border-radius:4px;padding:6px 10px;margin-top:4px">' +
+                'projected margin: ' + (detailRow.margin_pct||'—') + '%<br>' +
+                'floor: 18.00%<br>' +
+                'shortfall: ' + (detailRow.margin_pct?(18-parseFloat(detailRow.margin_pct)).toFixed(2):'—') + '%<br>' +
+                'ceiling: ' + (detailRow.constraint_json?JSON.parse(detailRow.constraint_json).max_discount_pct+'%':'22.74%') +
+              '</div>' :
+            detailRow.reason==='velocity_limit'?
+              '<div style="color:#DC2626">✕ Velocity limit exceeded — too many proposals per minute</div>' :
+              '<div style="color:#DC2626">✕ ' + detailRow.reason.replace(/_/g,' ') + '</div>'
+            }
+            <div style="color:#818597;margin-top:4px">— Authorization halted. Remaining rules not evaluated.</div>`:''}
           ${detailRow.decision==='GATE'?`
             <div style="color:#16A34A">✓ Margin above floor (${detailRow.margin_pct}%)</div>
             <div style="color:#16A34A">✓ Return risk acceptable</div>
