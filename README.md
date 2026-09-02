@@ -396,4 +396,16 @@ It is an economic authorization and governance control plane. The AI is bounded 
 
 ---
 
+---
+
+## Limitations
+
+- **Experiment is underpowered.** n=50 with 27/23 split is below threshold for statistical significance. Results are directional only — not causal evidence of growth.
+- **Authorization score is heuristic.** The economic score (0-100) is a weighted penalty function, not a calibrated probability of financial risk.
+- **Razorpay integration runs in test mode.** Orders are created against Razorpay test API. No real payments are captured.
+- **COGS catalog is static.** Real-time supplier price feeds are not implemented. COGS changes require manual catalog update or invoice re-extraction.
+- **Kill switch is in-process.** `_kill_switch_active` is a Python global — it resets on server restart. Production would require persistent state (Redis/DynamoDB).
+- **Policy version check is advisory.** Stale passport detection is implemented but execution falls back gracefully rather than hard-rejecting.
+
+
 *github.com/saksham869/margin-guard · Razorpay AI Buildathon 2026 · Track 01*
