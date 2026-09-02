@@ -1074,7 +1074,38 @@ function renderSecurity() {
           </div>
         </div>
 
-        <!-- Agent permissions -->
+        <!-- AI intent vs authority -->
+      <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:20px">
+        <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;font-size:14px;font-weight:600">AI intent vs authorization granted</div>
+        <div style="padding:18px 20px">
+          <div style="font-size:12px;color:#818597;margin-bottom:16px">What the AI proposed → what MarginGuard actually authorized. The gap is the control plane working.</div>
+
+          ${[
+            {label:'SHOE-001 + SOCK-3PK bundle', proposed:'30% discount', authorized:'DENIED → replanned to 18%', proposedColor:'#DC2626', authColor:'#16A34A', outcome:'ALLOW'},
+            {label:'SHOE-001 + SOCK-3PK bundle', proposed:'21% discount', authorized:'GATE → human required',     proposedColor:'#D97706', authColor:'#D97706', outcome:'GATE'},
+            {label:'SHIRT-1 return risk',         proposed:'15% discount', authorized:'DENIED — return rate 28%', proposedColor:'#DC2626', authColor:'#DC2626', outcome:'DENY'},
+            {label:'MAT-1 + FOAM-1 bundle',       proposed:'15% discount', authorized:'ALLOW — all checks passed',proposedColor:'#16A34A', authColor:'#16A34A', outcome:'ALLOW'},
+          ].map(r => `
+            <div style="display:grid;grid-template-columns:1fr 28px 1fr;gap:8px;align-items:center;margin-bottom:10px">
+              <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:5px;padding:10px 14px">
+                <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">AI proposed</div>
+                <div style="font-size:12px;font-weight:500">${r.label}</div>
+                <div style="font-size:13px;font-weight:600;color:${r.proposedColor};margin-top:4px;font-family:'JetBrains Mono',monospace">${r.proposed}</div>
+              </div>
+              <div style="text-align:center;font-size:18px;color:#CBD5E1">→</div>
+              <div style="background:${r.outcome==='ALLOW'?'#DCFCE7':r.outcome==='DENY'?'#FEE2E2':'#FEF3C7'};border:1px solid ${r.outcome==='ALLOW'?'#BBF7D0':r.outcome==='DENY'?'#FECACA':'#FDE68A'};border-radius:5px;padding:10px 14px">
+                <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">MarginGuard authorized</div>
+                <div style="font-size:13px;font-weight:600;color:${r.authColor};font-family:'JetBrains Mono',monospace">${r.authorized}</div>
+              </div>
+            </div>`).join('')}
+
+          <div style="margin-top:14px;padding:12px 16px;background:#012652;border-radius:5px;font-size:12px;color:rgba(255,255,255,0.7);line-height:1.6;font-style:italic">
+            "The AI decides what it wants to accomplish. It cannot decide what financial actions it is authorized to take."
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent permissions -->
         <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
           <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;font-size:14px;font-weight:600">Agent permissions</div>
           <table style="width:100%;border-collapse:collapse">
