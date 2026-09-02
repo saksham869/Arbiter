@@ -835,7 +835,6 @@ def resolve_quarantine(body: dict):
         args        = {"resolved_action_id": action_id, "resolution": resolution},
         decision    = decision_code,
         reason      = "manual_reconciliation",
-        margin_pct  = None,
         parent_id   = action_id,
         attempt_no  = 1,
     )

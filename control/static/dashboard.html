@@ -161,7 +161,7 @@ function loadData() {
     .then(r => r.json())
     .then(d => {
       if (d.entries && d.entries.length) {
-        DECISIONS = d.entries;
+        DECISIONS = d.entries.filter(function(e){ return e.tool !== 'reconcile'; });
         if (current === 'overview') renderOverview();
       }
     })
