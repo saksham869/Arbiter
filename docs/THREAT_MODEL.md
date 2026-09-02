@@ -1,8 +1,8 @@
-# MarginGuard — Threat Model
+# Arbiter — Threat Model
 
 **Version:** 1.0  
 **Date:** September 2026  
-**Scope:** MarginGuard economic authorization layer — Razorpay AI Buildathon prototype
+**Scope:** Arbiter economic authorization layer — Razorpay AI Buildathon prototype
 
 ---
 
@@ -212,4 +212,4 @@ The threat model is published to demonstrate architectural awareness, not to cla
 
 ---
 
-*MarginGuard · Razorpay AI Buildathon 2026 · Track 01*
+*Arbiter · Razorpay AI Buildathon 2026 · Track 01*

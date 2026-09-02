@@ -1,4 +1,4 @@
-# margin-guard
+# Arbiter
 
 **Economic authorization layer for autonomous AI commerce agents.**
 
@@ -42,7 +42,7 @@ The agent "succeeded." The merchant bled.
 > **The AI decides what it wants to accomplish.**
 > **It cannot decide what financial actions it is authorized to take.**
 
-MarginGuard is the layer between those two statements.
+Arbiter is the layer between those two statements.
 
 ---
 
@@ -51,7 +51,7 @@ MarginGuard is the layer between those two statements.
 ```
 Agent:   "I want to bundle SHOE-001 + SOCK-3PK at 30% off."
 
-MarginGuard:
+Arbiter:
   margin    = 9.74%
   floor     = 18.00%
   ceiling   = 22.74%   ← closed-form, not guessed
@@ -64,7 +64,7 @@ Agent reads constraint. Changes strategy.
 Agent:   "Switching to 18% — within the 22.74% ceiling.
           SOCK-3PK: affinity 0.579, medium inventory pressure."
 
-MarginGuard:
+Arbiter:
   margin         = 22.61%
   economic_score = 70.44/100
   decision       = ALLOW
@@ -117,7 +117,7 @@ BEDROCK GUARDRAILS                     Layer 1 AI safety
   Blocks before reaching control plane
        │
        ▼
-MARGINEGUARD ECONOMIC CONTROL PLANE
+ARBITER ECONOMIC CONTROL PLANE
   MarginEngine (pure arithmetic, zero LLM, zero network)
     fee    = paid × 2%
     gst    = fee × 18%
@@ -173,7 +173,7 @@ MARGINEGUARD ECONOMIC CONTROL PLANE
 ## Experiment results — honest reporting
 
 Real A/B experiment. 50 holdout orders. Split by ORDER_ID hash.
-Control: no intervention. Treatment: agent proposes within MarginGuard bounds.
+Control: no intervention. Treatment: agent proposes within Arbiter bounds.
 
 ```
                     CONTROL      TREATMENT    LIFT
@@ -369,8 +369,8 @@ GET   /dashboard                        governance console
 ## Quickstart
 
 ```bash
-git clone https://github.com/saksham869/margin-guard
-cd margin-guard
+git clone https://github.com/saksham869/Arbiter
+cd Arbiter
 pip3 install -r requirements.txt
 docker compose up -d
 cp .env.example .env
@@ -465,4 +465,4 @@ What happens when each dependency fails:
 - **Policy version check is advisory.** Stale passport detection is implemented but execution falls back gracefully rather than hard-rejecting.
 
 
-*github.com/saksham869/margin-guard · Razorpay AI Buildathon 2026 · Track 01*
+*github.com/saksham869/Arbiter · Razorpay AI Buildathon 2026 · Track 01*

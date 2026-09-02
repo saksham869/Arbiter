@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>MarginGuard</title>
+<title>Arbiter</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -54,7 +54,7 @@ button{font-family:inherit;cursor:pointer}
   <!-- Sidebar -->
   <aside id="sidebar">
     <div class="sb-logo">
-      <div class="sb-logo-title">MarginGuard</div>
+      <div class="sb-logo-title">Arbiter</div>
       <div class="sb-logo-sub">Economic authorization</div>
     </div>
 
@@ -802,7 +802,7 @@ function renderExperiments() {
     <!-- Result summary -->
     <div style="background:#012652;border-radius:6px;padding:18px 20px;margin-bottom:16px">
       <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:10px">Experiment verdict</div>
-      <div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.7;margin-bottom:10px">This experiment did not produce positive aggregate uplift. MarginGuard reports the loss rather than optimizing the dashboard for a positive narrative.</div>
+      <div style="font-size:14px;color:rgba(255,255,255,0.9);line-height:1.7;margin-bottom:10px">This experiment did not produce positive aggregate uplift. Arbiter reports the loss rather than optimizing the dashboard for a positive narrative.</div>
       <div style="font-size:12px;color:rgba(255,255,255,0.5);font-style:italic">"A control plane that cannot be bribed by vanity metrics is the point."</div>
     </div>
 
@@ -973,7 +973,7 @@ function renderQuarantine() {
               <div style="font-size:12px;color:#818597;margin-top:2px">Gateway timeout during execution</div>
             </div>
             <div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:5px;padding:12px 14px">
-              <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">What MarginGuard did</div>
+              <div style="font-size:11px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">What Arbiter did</div>
               <div style="font-size:13px;font-weight:500;color:#1C1C1C">SAFE_HALT</div>
               <div style="font-size:12px;color:#818597;margin-top:2px">No retry · No assumption</div>
             </div>
@@ -1006,7 +1006,7 @@ function renderQuarantine() {
           ? `<span style="font-size:12px;background:#FEE2E2;color:#DC2626;padding:3px 10px;border-radius:12px;font-weight:600;border:1px solid #FECACA">${unknown.length} unresolved</span>`
           : ''}
       </div>
-      <div style="font-size:13px;color:#818597">Actions where execution state became indeterminate. MarginGuard halted and did not retry.</div>
+      <div style="font-size:13px;color:#818597">Actions where execution state became indeterminate. Arbiter halted and did not retry.</div>
     </div>
 
     <!-- What is UNKNOWN -->
@@ -1014,11 +1014,11 @@ function renderQuarantine() {
       <span style="font-size:20px;flex-shrink:0">⚠</span>
       <div style="font-size:13px;color:#92400E;line-height:1.6">
         <strong>What is UNKNOWN?</strong> When Razorpay returns a 5xx response,
-        MarginGuard cannot determine whether a charge occurred.
+        Arbiter cannot determine whether a charge occurred.
         The action is immediately quarantined. No retry is attempted. No assumption is made.
         This requires human investigation and resolution.
         <br><br>
-        Most systems retry automatically or assume failure. MarginGuard does neither.
+        Most systems retry automatically or assume failure. Arbiter does neither.
       </div>
     </div>
 
@@ -1115,7 +1115,7 @@ function renderSecurity() {
             ${[
               {label:'AGENT',      sub:'Claude Haiku 4.5 · AWS Bedrock',  note:'Proposal only — no credentials',        color:'#E6F0FF',border:'#0D94FB',text:'#0D94FB'},
               {label:'GUARDRAILS', sub:'Bedrock Guardrail 9cq40q5l324c',  note:'Prompt injection blocked at perimeter', color:'#F1F5F9',border:'#CBD5E1',text:'#818597'},
-              {label:'MARGINEGUARD',sub:'MarginEngine + PolicyEngine + Passport', note:'Deterministic authorization authority', color:'#012652',border:'#012652',text:'#fff'},
+              {label:'ARBITER',sub:'MarginEngine + PolicyEngine + Passport', note:'Deterministic authorization authority', color:'#012652',border:'#012652',text:'#fff'},
               {label:'EXECUTION',  sub:'ExecutionService + DynamoDB',     note:'Razorpay credentials live here only',   color:'#F1F5F9',border:'#CBD5E1',text:'#818597'},
               {label:'RAZORPAY',   sub:'Test mode API · real orders',     note:'Payment execution endpoint',             color:'#DCFCE7',border:'#16A34A',text:'#16A34A'},
             ].map((s,i,a) => `
@@ -1145,7 +1145,7 @@ function renderSecurity() {
       <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:20px">
         <div style="padding:14px 20px;border-bottom:1px solid #E2E8F0;font-size:14px;font-weight:600">AI intent vs authorization granted</div>
         <div style="padding:18px 20px">
-          <div style="font-size:12px;color:#818597;margin-bottom:16px">What the AI proposed → what MarginGuard actually authorized. The gap is the control plane working.</div>
+          <div style="font-size:12px;color:#818597;margin-bottom:16px">What the AI proposed → what Arbiter actually authorized. The gap is the control plane working.</div>
 
           ${[
             {label:'SHOE-001 + SOCK-3PK bundle', proposed:'30% discount', authorized:'DENIED → replanned to 18%', proposedColor:'#DC2626', authColor:'#16A34A', outcome:'ALLOW'},
@@ -1161,7 +1161,7 @@ function renderSecurity() {
               </div>
               <div style="text-align:center;font-size:18px;color:#CBD5E1">→</div>
               <div style="background:${r.outcome==='ALLOW'?'#DCFCE7':r.outcome==='DENY'?'#FEE2E2':'#FEF3C7'};border:1px solid ${r.outcome==='ALLOW'?'#BBF7D0':r.outcome==='DENY'?'#FECACA':'#FDE68A'};border-radius:5px;padding:10px 14px">
-                <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">MarginGuard authorized</div>
+                <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px">Arbiter authorized</div>
                 <div style="font-size:13px;font-weight:600;color:${r.authColor};font-family:'JetBrains Mono',monospace">${r.authorized}</div>
               </div>
             </div>`).join('')}
@@ -1447,7 +1447,7 @@ function renderAgent() {
   document.getElementById('content').innerHTML = `
     <div style="margin-bottom:24px">
       <div style="font-size:20px;font-weight:600;margin-bottom:4px">Agent runtime</div>
-      <div style="font-size:13px;color:#818597">The growth agent operates within a strict security boundary. It proposes. MarginGuard authorizes.</div>
+      <div style="font-size:13px;color:#818597">The growth agent operates within a strict security boundary. It proposes. Arbiter authorizes.</div>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
@@ -1521,7 +1521,7 @@ function renderAgent() {
             ${i===3?'<div style="font-size:10px;margin-top:3px;opacity:0.7">Current</div>':''}
           </div>`).join('')}
       </div>
-      <div style="font-size:12px;color:#818597;margin-top:10px">MarginGuard makes agent autonomy configurable, not binary. Current level: L3 — auto-execute bounded actions within policy.</div>
+      <div style="font-size:12px;color:#818597;margin-top:10px">Arbiter makes agent autonomy configurable, not binary. Current level: L3 — auto-execute bounded actions within policy.</div>
     </div>
 
     <!-- Permissions table -->
@@ -1559,7 +1559,7 @@ function renderAgent() {
             ${i<denyLoop.length-1?'<div style="color:#CBD5E1;font-size:16px">→</div>':''}
           </div>`).join('')}
       </div>
-      <div style="font-size:11px;color:#818597;margin-top:12px">Objective preserved across all attempts. Strategy changes. Authorization authority stays with MarginGuard.</div>
+      <div style="font-size:11px;color:#818597;margin-top:12px">Objective preserved across all attempts. Strategy changes. Authorization authority stays with Arbiter.</div>
     </div>`;
 }
 

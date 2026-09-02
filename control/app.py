@@ -46,7 +46,7 @@ def _emit_metrics(decision: str, margin_pct: float, eco_score: float,
     """Emit product-focused metrics to CloudWatch."""
     try:
         _cw.put_metric_data(
-            Namespace="MarginGuard",
+            Namespace="Arbiter",
             MetricData=[
                 {
                     "MetricName": "ProposalDecision",
@@ -83,7 +83,7 @@ from control.policy import PolicyEngine, MerchantLimits
 from control.execution import mint_token, execute
 import control.ledger as ledger
 
-app = FastAPI(title="margin-guard", version="0.1.0")
+app = FastAPI(title="Arbiter", version="0.1.0")
 
 # ── Kill switch state ──────────────────────────────────────────────────────────
 _kill_switch_active = False
@@ -190,7 +190,7 @@ def _load_catalog() -> dict:
 @app.get("/control/health")
 def health():
     import boto3, os
-    results = {"service": "margin-guard", "status": "UP"}
+    results = {"service": "Arbiter", "status": "UP"}
 
     # MariaDB
     try:
@@ -297,7 +297,7 @@ def approve_action(action_id: str, token: str):
             return HTMLResponse("<h2>Approval rejected: Kill switch active. Deactivate first.</h2>", status_code=409)
     except Exception as _e:
         import logging
-        logging.getLogger("margin-guard").warning("GATE revalidation error: %s", _e)
+        logging.getLogger("Arbiter").warning("GATE revalidation error: %s", _e)
 
     # Execute the approved action
     from control.execution import mint_token, execute
@@ -308,7 +308,7 @@ def approve_action(action_id: str, token: str):
     if result.status == "SUCCESS":
         return HTMLResponse(f"""
         <html><body style="font-family:system-ui;max-width:600px;margin:60px auto;padding:20px">
-        <h1>margin-guard</h1>
+        <h1>Arbiter</h1>
         <h2>Action Approved</h2>
         <p>Order created: <strong>{result.rzp_entity_id}</strong></p>
         <p>Amount: Rs.{args.get('amount', 0)/100:,.2f}</p>
@@ -334,7 +334,7 @@ def reject_action(action_id: str, token: str):
     from fastapi.responses import HTMLResponse
     return HTMLResponse("""
     <html><body style="font-family:system-ui;max-width:600px;margin:60px auto;padding:20px">
-    <h1>margin-guard</h1>
+    <h1>Arbiter</h1>
     <h2>Action Rejected</h2>
     <p>The proposed bundle offer has been rejected.</p>
     <p>No charge was made. The AI agent has been notified.</p>
@@ -559,7 +559,7 @@ def propose(req: ProposalIn):
                 )
                 _sns.publish(
                     TopicArn=SNS_TOPIC_ARN,
-                    Subject="[MarginGuard] Action requires your approval",
+                    Subject="[Arbiter] Action requires your approval",
                     Message=(
                         f"Your AI growth agent has proposed an action that requires approval.\n\n"
                         f"Items:      {items_str}\n"
@@ -688,7 +688,7 @@ def propose(req: ProposalIn):
             }
     except Exception as _toctou_err:
         import logging
-        logging.getLogger("margin-guard").warning("TOCTOU revalidation error: %s", _toctou_err)
+        logging.getLogger("Arbiter").warning("TOCTOU revalidation error: %s", _toctou_err)
     # ─────────────────────────────────────────────────────────────
 
     result = execute(entry.id, token, "create_order", args, passport=passport)
