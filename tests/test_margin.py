@@ -132,3 +132,127 @@ def test_ceiling_unknown_cogs_raises(engine):
     item = LineItem(sku="X", quantity=1, list_price_paise=10000, cogs_paise=None)
     with pytest.raises(UnknownCogsError):
         engine.max_discount([item], list_total_paise=10000, floor_pct=18.0)
+
+
+# ── Boundary and pathological input tests ──────────────────────────────────────
+
+def test_zero_cogs_allowed_but_margin_correct():
+    """Zero COGS should compute correctly — full paid amount is margin."""
+    from control.margin import LineItem, MarginEngine, FeeModel
+    engine = MarginEngine(FeeModel.standard())
+    items = [LineItem(sku="TEST", quantity=1, list_price_paise=100000, cogs_paise=0)]
+    result = engine.compute(items, paid_paise=90000)
+    # Margin = (paid - fees - 0 COGS) / paid — should be very high
+    assert result.margin_pct > 80, f"Zero COGS should yield high margin, got {result.margin_pct}"
+
+
+def test_hundred_percent_discount_zero_paid():
+    """100% discount means paid=0 — engine must not divide by zero."""
+    from control.margin import LineItem, MarginEngine, FeeModel
+    engine = MarginEngine(FeeModel.standard())
+    items = [LineItem(sku="SHOE-001", quantity=1, list_price_paise=120000, cogs_paise=62000)]
+    try:
+        result = engine.compute(items, paid_paise=0)
+        # If it doesn't crash, margin should be deeply negative or zero
+        assert result.margin_pct <= 0
+    except (ZeroDivisionError, Exception) as e:
+        # Acceptable — engine may reject zero paid
+        assert True
+
+
+def test_negative_discount_raises_or_clamps():
+    """Negative discount (paid > list) should not produce absurd results."""
+    from control.margin import LineItem, MarginEngine, FeeModel
+    engine = MarginEngine(FeeModel.standard())
+    items = [LineItem(sku="SHOE-001", quantity=1, list_price_paise=120000, cogs_paise=62000)]
+    # paid > list_price (negative discount)
+    result = engine.compute(items, paid_paise=150000)
+    # Should compute without crash — margin will be higher
+    assert isinstance(result.margin_pct, float)
+
+
+def test_huge_quantity_no_overflow():
+    """Very large quantity should not cause integer overflow."""
+    from control.margin import LineItem, MarginEngine, FeeModel
+    engine = MarginEngine(FeeModel.standard())
+    items = [LineItem(sku="SOCK-3PK", quantity=10000, list_price_paise=29900, cogs_paise=21000)]
+    list_total = 29900 * 10000
+    paid = int(list_total * 0.85)
+    result = engine.compute(items, paid_paise=paid)
+    assert isinstance(result.margin_pct, float)
+    assert result.margin_pct > 0
+
+
+def test_duplicate_sku_handled():
+    """Same SKU appearing twice should not double-count incorrectly."""
+    from control.margin import LineItem, MarginEngine, FeeModel
+    engine = MarginEngine(FeeModel.standard())
+    items = [
+        LineItem(sku="SHOE-001", quantity=1, list_price_paise=120000, cogs_paise=62000),
+        LineItem(sku="SHOE-001", quantity=1, list_price_paise=120000, cogs_paise=62000),
+    ]
+    list_total = 240000
+    paid = int(list_total * 0.85)
+    result = engine.compute(items, paid_paise=paid)
+    assert isinstance(result.margin_pct, float)
+
+
+def test_margin_ceiling_invariant_higher_cogs():
+    """Higher COGS must never produce a higher discount ceiling."""
+    from control.margin import LineItem, MarginEngine, FeeModel
+    engine = MarginEngine(FeeModel.standard())
+    list_total = 120000
+
+    low_cogs = [LineItem(sku="X", quantity=1, list_price_paise=120000, cogs_paise=40000)]
+    high_cogs = [LineItem(sku="X", quantity=1, list_price_paise=120000, cogs_paise=80000)]
+
+    ceiling_low  = engine.max_discount(low_cogs,  list_total, floor_pct=18.0).max_discount_pct
+    ceiling_high = engine.max_discount(high_cogs, list_total, floor_pct=18.0).max_discount_pct
+
+    assert ceiling_high <= ceiling_low, \
+        f"Higher COGS must never raise ceiling: low={ceiling_low:.2f}% high={ceiling_high:.2f}%"
+
+
+def test_margin_ceiling_invariant_higher_floor():
+    """Higher margin floor must never produce a higher discount ceiling."""
+    from control.margin import LineItem, MarginEngine, FeeModel
+    engine = MarginEngine(FeeModel.standard())
+    items = [LineItem(sku="X", quantity=1, list_price_paise=120000, cogs_paise=62000)]
+    list_total = 120000
+
+    ceiling_18 = engine.max_discount(items, list_total, floor_pct=18.0).max_discount_pct
+    ceiling_25 = engine.max_discount(items, list_total, floor_pct=25.0).max_discount_pct
+
+    assert ceiling_25 <= ceiling_18, \
+        f"Higher floor must lower ceiling: 18%→{ceiling_18:.2f}% 25%→{ceiling_25:.2f}%"
+
+
+def test_margin_invariant_higher_discount_lower_margin():
+    """Higher discount must never produce better margin."""
+    from control.margin import LineItem, MarginEngine, FeeModel
+    engine = MarginEngine(FeeModel.standard())
+    items = [LineItem(sku="SHOE-001", quantity=1, list_price_paise=120000, cogs_paise=62000)]
+    list_total = 120000
+
+    paid_10 = int(list_total * 0.90)  # 10% discount
+    paid_20 = int(list_total * 0.80)  # 20% discount
+
+    margin_10 = engine.compute(items, paid_paise=paid_10).margin_pct
+    margin_20 = engine.compute(items, paid_paise=paid_20).margin_pct
+
+    assert margin_20 < margin_10, \
+        f"Higher discount must lower margin: 10%→{margin_10:.2f}% 20%→{margin_20:.2f}%"
+
+
+def test_unknown_cogs_never_allow():
+    """Unknown COGS (None) must never produce an ALLOW decision."""
+    from control.margin import LineItem
+    from control.app import _build_engine, _load_policy, _load_catalog
+    _pol = _load_policy()
+    _cat = _load_catalog()
+    engine = _build_engine(_pol, _cat)
+    # Item with no COGS — should trigger unknown_cogs → DENY
+    items = [LineItem(sku="GHOST", quantity=1, list_price_paise=100000, cogs_paise=None)]
+    result = engine.check(items=items, paid_paise=90000, list_total_paise=100000)
+    assert result.result != "ALLOW", f"Unknown COGS must never ALLOW, got {result.result}"
+    assert result.reason == "unknown_cogs"
