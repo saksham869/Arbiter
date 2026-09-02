@@ -1,7 +1,6 @@
-
 # margin-guard
 
-**Razorpay AI Buildathon 2026 · Track 01: AI Growth & Agentic Commerce**
+**Economic authorization layer for autonomous AI commerce agents.**
 
 ---
 
@@ -20,12 +19,10 @@ cost:       ???      ✗  (the cost of goods)
 margin:     ???      ✗  (what the merchant actually keeps)
 ```
 
-An AI agent that proposes discounts without knowing cost will destroy money
-while technically "growing sales."
+An AI agent that proposes discounts without knowing cost will destroy money while technically "growing sales."
 
 ```
 Agent proposes: 30% off running shoes
-
 Merchant receives:
   Paid by customer:  ₹944.30
   Razorpay fees:     ₹22.29  (2% + 18% GST)
@@ -73,27 +70,26 @@ MarginGuard:
   decision       = ALLOW
 
 Action Passport issued:
-  allowed_action:   DISCOUNT_OFFER
-  max_discount_pct: 22.74
-  authorized_amount:₹1,106.18
-  valid_until:      2026-08-29T15:47:21Z   ← 5-minute TTL
-  passport_hash:    9ed913f4...            ← tamper-evident
+  allowed_action:    DISCOUNT_OFFER
+  max_discount_pct:  22.74
+  authorized_amount: ₹1,106.18
+  valid_until:       +5 min TTL
+  passport_hash:     9ed913f4...   ← tamper-evident
 
 Razorpay: create_order → order_TVhBe2pu2TkAiI
 S3 Object Lock: actions/2026/08/29/{id}.json  ← immutable, 7 years
 ```
 
-The objective stayed constant. The strategy changed.
-That is agent reasoning — not binary search.
+The objective stayed constant. The strategy changed. That is agent reasoning — not binary search.
 
 ---
 
-## The architecture
+## Architecture
 
 ```
 MERCHANT
   catalog.csv (sku, price, COGS, return_rate, stock_units)
-  product images / supplier invoices
+  supplier invoices (PNG/JPG/PDF)
        │
        ▼
 MULTIMODAL COGS EXTRACTION
@@ -121,12 +117,11 @@ BEDROCK GUARDRAILS                     Layer 1 AI safety
   Blocks before reaching control plane
        │
        ▼
-MARGINGUARD ECONOMIC CONTROL PLANE
-
+MARGINEGUARD ECONOMIC CONTROL PLANE
   MarginEngine (pure arithmetic, zero LLM, zero network)
-    fee    = paid x 2%
-    gst    = fee x 18%
-    cogs   = sum(catalog[sku] x qty)    catalog is authoritative
+    fee    = paid × 2%
+    gst    = fee × 18%
+    cogs   = sum(catalog[sku] × qty)    catalog is authoritative
     margin = paid - fee - gst - cogs
     ceil   = cogs / (k - floor)         closed-form
 
@@ -141,9 +136,9 @@ MARGINGUARD ECONOMIC CONTROL PLANE
 
   Economic Authorization Score
     score = 100
-          - margin_penalty
-          - return_risk_penalty
-          - discount_depth_penalty
+          − margin_penalty
+          − return_risk_penalty
+          − discount_depth_penalty
           + inventory_pressure_bonus
     >65 ALLOW   35-65 GATE   <35 DENY
 
@@ -151,65 +146,57 @@ MARGINGUARD ECONOMIC CONTROL PLANE
     authorized_rungs AND safe_rungs = eligible
     selected = highest eligible rung
        │
-  DENY      GATE            ALLOW
-    │         │               │
-    │     SQS queue     Action Passport
-    │     SNS email     scoped, time-bounded,
-    │     Merchant      hash-verified
-    │     approves           │
-    │         │              ▼
-    │         │        ExecutionService
-    │         │        DynamoDB idempotency  ← survives restarts
-    │         │        Single-use token
-    │         │        Razorpay API
-    │         │        2xx SUCCESS
-    │         │        5xx UNKNOWN quarantine SAFE_HALT
-    │         │              │
-    └─────────┴──────────────┘
-                             │
-                       EvidenceLedger
-                       SHA-256 hash chain   tamper-evident
-                       S3 Object Lock       truly immutable
-                       CloudWatch metrics   live observability
+  DENY       GATE             ALLOW
+    │          │                │
+    │      SQS queue      Action Passport
+    │      SNS email      scoped, time-bounded,
+    │      Merchant       hash-verified
+    │      approves            │
+    │          │               ▼
+    │          │         ExecutionService
+    │          │         DynamoDB idempotency  ← survives restarts
+    │          │         Single-use token
+    │          │         Razorpay API
+    │          │         2xx → SUCCESS
+    │          │         5xx → UNKNOWN → quarantine → SAFE_HALT
+    │          │               │
+    └──────────┴───────────────┘
+                               │
+                         EvidenceLedger
+                         SHA-256 hash chain   tamper-evident
+                         S3 Object Lock       truly immutable
+                         CloudWatch metrics   live observability
 ```
 
 ---
 
-## The numbers
+## Experiment results — honest reporting
 
-Real A/B experiment. 50 holdout orders. 50/50 split by order_id hash.
-Control: no intervention. Treatment: agent proposes.
+Real A/B experiment. 50 holdout orders. Split by ORDER_ID hash.
+Control: no intervention. Treatment: agent proposes within MarginGuard bounds.
 
 ```
-                    CONTROL     TREATMENT     LIFT
-AOV                 ₹987.96     ₹1,415.76    +43.3%
-Contribution margin ₹365.12     ₹441.94      +21.0%
-
-Avg economic score: 81.2 / 100
+                    CONTROL      TREATMENT    LIFT
+AOV                 ₹1,377.33    ₹1,207.21    -12.4%
+Contribution margin ₹494.43      ₹473.55      -4.2%
+Avg economic score: 83.9 / 100
 ```
 
 By category (losses shown — not hidden):
 
 ```
-accessories     +213.4%   SOCK-3PK excess inventory cleared
-apparel          +28.4%
-fitness          +18.5%
-footwear         -13.8%   agent over-bundled, diluted basket
-electronics          0%   1 order, no signal
+accessories     +213.1%   high affinity, excess inventory cleared
+apparel           -3.9%   ← loss
+fitness          -14.9%   ← loss
+footwear         -18.4%   ← loss
+electronics     -100.0%   n=1, not meaningful
 ```
 
-The -13.8% footwear loss is the most important number.
-A table with only green rows is fabricated.
-The loss makes the +43.3% credible.
+The agent underperformed the control group in aggregate. We report this rather than hiding it.
 
-Policy enforcement:
+> "A control plane that cannot be bribed by vanity metrics is the point."
 
-```
-Proposed:   50
-Converted:  43   (86%) ALLOW
-Denied:      5   return risk — SHIRT-1, return_rate 28%
-Skipped:     2   no companion in affinity model
-```
+Statistical power: LOW (n=50). Results are directional, not causal.
 
 ---
 
@@ -220,13 +207,14 @@ Every service solves a real failure mode. None are decorative.
 | Service | What breaks without it |
 |---|---|
 | Bedrock Claude Haiku 4.5 | Agent cannot reason or replan |
-| Bedrock Guardrails | Prompt injection reaches the control plane |
-| DynamoDB | Process restart loses idempotency, Razorpay duplicate possible |
-| SQS | GATE returns 202 and nothing happens |
-| SNS | Merchant never knows an action is waiting |
-| S3 Object Lock | Hash chain detects tampering but cannot prevent it |
+| Bedrock Guardrails (9cq40q5l324c) | Prompt injection reaches the control plane |
+| DynamoDB (mg-idempotency) | Process restart loses idempotency, Razorpay duplicate possible |
+| SQS (mg-approval-queue) | GATE returns 202 and nothing happens |
+| SNS (mg-merchant-notifications) | Merchant never knows an action is waiting |
+| S3 Object Lock (COMPLIANCE, 7yr) | Hash chain detects tampering but cannot prevent it |
 | CloudWatch | No visibility into agent governance |
-| Secrets Manager | Razorpay credentials live in .env and in code history |
+| Secrets Manager (mg-razorpay-credentials) | Credentials live in .env and code history |
+| Lambda (mg-approval-handler) | Approval callback not deployed |
 
 ---
 
@@ -237,9 +225,7 @@ grep -rn "razorpay" agent/
 # Returns: nothing
 ```
 
-The agent has no Razorpay credentials.
-It cannot call razorpay.orders.create() even if its prompt is compromised.
-The agent receives an Action Passport — not credentials.
+The agent has no Razorpay credentials. It cannot call `razorpay.orders.create()` even if its prompt is compromised. The agent receives an Action Passport — not credentials.
 
 ```json
 {
@@ -253,8 +239,35 @@ The agent receives an Action Passport — not credentials.
 
 Two independent safety layers. Neither can be fooled by the other failing.
 
-Layer 1 — Bedrock Guardrails: blocks at the AI perimeter
-Layer 2 — PolicyEngine: deterministic, fail-closed, zero LLM
+- **Layer 1 — Bedrock Guardrails**: blocks at the AI perimeter
+- **Layer 2 — PolicyEngine**: deterministic, fail-closed, zero LLM
+
+Adversary tests:
+
+```bash
+python3 -m pytest tests/adversary/ -v
+# 8/8 passed: prompt injection, return risk, velocity abuse,
+#             corrupt policy, 5xx handling, tampered ledger,
+#             replay attack, unknown COGS
+```
+
+---
+
+## Kill switch — agent governance
+
+Autonomy is configurable, not binary.
+
+```bash
+POST /control/kill-switch/activate
+# All ALLOW decisions become GATE
+# Agent can still propose, cannot auto-execute
+# Human approval required for everything
+
+POST /control/kill-switch/deactivate
+# Autonomous execution resumed
+```
+
+Governance console shows L0–L4 autonomy levels. Current: L3 (auto-execute bounded actions within policy).
 
 ---
 
@@ -263,17 +276,14 @@ Layer 2 — PolicyEngine: deterministic, fail-closed, zero LLM
 ```
 ExecutionService calls create_order
 Razorpay returns 503
-
 exec_status = UNKNOWN        not SUCCESS, not FAILED
 quarantine row inserted      human resolution required
 SAFE_HALT                    no retry, no assumption
-
 MariaDB: /verify returns intact: true
 S3: permanent record of the unknown outcome
 ```
 
-We never say "no charge occurred."
-We say "execution state unknown. Autonomous action halted."
+We never say "no charge occurred." We say "execution state unknown. Autonomous action halted."
 
 ---
 
@@ -288,16 +298,34 @@ POST /control/catalog/extract-bytes
 Claude reads the invoice image:
   SHOE-001   Rs. 620.00   cogs_paise: 62000   confidence: 0.95
   SOCK-3PK   Rs. 210.00   cogs_paise: 21000   confidence: 0.95
-
-Status: pending_review
+  Status: pending_review
 
 POST /control/catalog/approve
-  body: { extraction_id: "...", approved_skus: ["SHOE-001"] }
-
-Catalog updated. COGS trusted.
+  body: { extraction_id: "..." }
+  Catalog updated. COGS trusted.
 ```
 
 Extracted COGS never auto-trust. Financial truth requires human approval.
+
+---
+
+## Governance console
+
+`http://localhost:8085/dashboard`
+
+10-page operations console:
+
+- **Overview** — decision flow, real-time metrics, authorization pipeline
+- **Proposals** — every decision with economic score, policy evaluation, Action Passport
+- **Authorization replay** — watch 13-step pipeline animate: propose → evaluate → DENY → constraint → replan → ALLOW → execute → evidence
+- **Approval queue** — GATE actions with one-click approve/reject (calls real backend)
+- **Experiments** — honest A/B results with integrity panel (randomization method, statistical power, interpretation)
+- **Policies** — editable business controls with impact simulator
+- **Catalog** — COGS extraction workflow (upload invoice → Claude extracts → human approves)
+- **Audit trail** — hash chain with live `/verify` button
+- **Quarantine** — UNKNOWN state exposure and resolution
+- **Agent runtime** — kill switch, autonomy levels, permission boundary
+- **Security** — trust boundary diagram, AI intent vs authority visualization, adversary results
 
 ---
 
@@ -307,10 +335,9 @@ Extracted COGS never auto-trust. Financial truth requires human approval.
 tests/test_margin.py     21   fee math, ceiling formula, edge cases
 tests/test_policy.py     14   7 rules, fail-closed, DENY-wins
 tests/test_ledger.py     12   hash chain, tamper detection
-tests/adversary/          8   prompt injection, return risk,
-                              velocity, corrupt policy,
-                              5xx handling, tampered hash,
-                              replay attack, unknown COGS
+tests/adversary/          8   prompt injection, return risk, velocity,
+                              corrupt policy, 5xx, tampered hash,
+                              replay, unknown COGS
 ─────────────────────────────────────────────────
                          55   passing
 ```
@@ -320,14 +347,21 @@ tests/adversary/          8   prompt injection, return risk,
 ## API
 
 ```
-POST  /control/propose                 agent submits proposals
-POST  /control/margin/ceiling          query max safe discount
-POST  /control/catalog/extract-bytes   multimodal COGS from image
-POST  /control/catalog/approve         human approves extracted COGS
-GET   /control/catalog/pending         review queue
-GET   /control/audit                   list all decisions
-GET   /control/audit/verify            chain integrity
-GET   /control/health                  status UP
+POST  /control/propose                  agent submits proposals
+POST  /control/margin/ceiling           query max safe discount for SKU
+POST  /control/catalog/extract-bytes    multimodal COGS from image
+POST  /control/catalog/approve          human approves extracted COGS
+GET   /control/catalog/pending          pending extractions
+GET   /control/audit                    list all decisions
+GET   /control/audit/verify             hash chain integrity check
+GET   /control/kill-switch              autonomy status
+POST  /control/kill-switch/activate     pause autonomous execution
+POST  /control/kill-switch/deactivate   resume autonomous execution
+POST  /control/dashboard/approve        approve GATE action from dashboard
+POST  /control/dashboard/reject         reject GATE action from dashboard
+POST  /control/policy                   update policy parameters
+GET   /control/health                   service health (DB, Bedrock, AWS, Razorpay)
+GET   /dashboard                        governance console
 ```
 
 ---
@@ -337,49 +371,29 @@ GET   /control/health                  status UP
 ```bash
 git clone https://github.com/saksham869/margin-guard
 cd margin-guard
-
 pip3 install -r requirements.txt
 docker compose up -d
-
 cp .env.example .env
 # RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET
 # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (Bedrock + DynamoDB + S3)
-
 python3 data/seed.py                          # seed 250 orders
 python3 -m uvicorn control.app:app --port 8085
+open http://localhost:8085/dashboard          # governance console
 python3 -m agent.agent holdout               # run A/B experiment
 python3 -m pytest tests/ -v                  # 55 tests
 ```
 
 ---
 
-## What I did not build
+## What this is not
 
-- Angular console — JSON endpoints, readable by anything
-- Webhook listener — polling (production: webhooks)
-- Lambda approval callback — GATE queued and notified, approval dashboard not wired
-- Multi-agent supervisor — single agent is sufficient for the scope
-- Kubernetes — Docker Compose
+- Not an AI chatbot with a Razorpay integration
+- Not a revenue recovery tool
+- Not a recommendation engine
+- Not a dashboard that calls Razorpay directly
 
-None of these are in the bar sentence.
-
-The bar: *"Every money action explainable, bounded and gated.*
-*Show the audit trail and one failure handled gracefully."*
-
-Every word addressed.
+It is an economic authorization and governance control plane. The AI is bounded by it, not empowered by it.
 
 ---
 
-## Four constraints found on Day 1
-
-| Constraint | Response |
-|---|---|
-| line_items needs Magic Checkout | notes channel is primary |
-| Offers Dashboard-only, no create API | pre-authorized ladder in policy.yaml |
-| UPI Reserve Pay unavailable | create_order covers all upsell paths |
-| MDR refundability ambiguous in docs | config flag mdr_refundable, default false |
-
----
-
-*github.com/saksham869/margin-guard*
-
+*github.com/saksham869/margin-guard · Razorpay AI Buildathon 2026 · Track 01*
