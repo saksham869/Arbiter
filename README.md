@@ -398,6 +398,27 @@ It is an economic authorization and governance control plane. The AI is bounded 
 
 ---
 
+## Graceful degradation
+
+What happens when each dependency fails:
+
+| Dependency fails | System behavior |
+|---|---|
+| Bedrock (agent) | Agent unavailable. Policy engine and existing passports unaffected. No new proposals. |
+| Bedrock Guardrails | Proposals blocked at perimeter. No financial authorization attempted. |
+| MariaDB | No authorization decisions. No ledger writes. System halts. |
+| DynamoDB | Execution blocked. No Razorpay calls without idempotency guarantee. |
+| SQS | GATE action still created and logged. Merchant notification via SNS only. Queue backlog visible. |
+| SNS | GATE action queued in SQS. Merchant not notified. Action remains pending. |
+| S3 Object Lock | Decision recorded in MariaDB hash chain. S3 evidence write fails — surfaced in logs. |
+| Razorpay | Execution returns UNKNOWN. Action quarantined. No retry. No assumption of success or failure. |
+| AWS Secrets Manager | Credentials unavailable. Execution service halts. No Razorpay calls. |
+| Kill switch store | In current prototype: in-process state resets on restart. Production: fail-closed (assume active). |
+| Policy store | PolicyEngine fails closed — DENY on corrupt or missing policy. |
+
+
+---
+
 ## Limitations
 
 - **Experiment is underpowered.** n=50 with 27/23 split is below threshold for statistical significance. Results are directional only — not causal evidence of growth.
