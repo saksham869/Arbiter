@@ -116,11 +116,11 @@ def _margin_str(v) -> str:
     None              -> ''
     """
     if v is None:
-        return ""
+        return None
     try:
         return str(round(float(v), 2))
     except (TypeError, ValueError):
-        return ""
+        return None
 
 
 def _compute_hash(

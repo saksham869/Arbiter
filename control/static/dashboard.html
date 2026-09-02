@@ -979,7 +979,8 @@ function renderQuarantine() {
 
           <div style="display:flex;gap:10px">
             <button style="padding:8px 18px;background:none;border:1px solid #E2E8F0;border-radius:5px;font-size:13px;font-weight:500;color:#818597;font-family:Inter,sans-serif;cursor:pointer">View in Razorpay</button>
-            <button onclick="resolveQuarantine('${d.id}')" style="padding:8px 18px;background:#16A34A;border:none;border-radius:5px;font-size:13px;font-weight:500;color:#fff;font-family:Inter,sans-serif;cursor:pointer">Mark resolved</button>
+            <button onclick="resolveQuarantine('${d.id}','CONFIRMED_NOT_FOUND')" style="padding:8px 18px;background:none;border:1px solid #E2E8F0;border-radius:5px;font-size:13px;font-weight:500;color:#DC2626;font-family:Inter,sans-serif;cursor:pointer">Confirm not found</button>
+            <button onclick="resolveQuarantine('${d.id}','CONFIRMED_SUCCESS')" style="padding:8px 18px;background:#16A34A;border:none;border-radius:5px;font-size:13px;font-weight:500;color:#fff;font-family:Inter,sans-serif;cursor:pointer">Confirm success</button>
           </div>
         </div>`).join('');
 
@@ -1010,10 +1011,28 @@ function renderQuarantine() {
     <div style="max-width:600px">${cards}</div>`;
 }
 
-function resolveQuarantine(id) {
-  const idx = DECISIONS.findIndex(d => d.id === id);
-  if (idx !== -1) DECISIONS[idx].exec_status = 'SUCCESS';
-  renderQuarantine();
+function resolveQuarantine(id, resolution) {
+  const btn = event.target;
+  btn.disabled = true;
+  btn.textContent = 'Resolving...';
+  fetch('/control/quarantine/resolve', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({action_id: id, resolution: resolution})
+  })
+  .then(r => r.json())
+  .then(() => {
+    const idx = DECISIONS.findIndex(d => d.id === id);
+    if (idx !== -1) DECISIONS[idx].exec_status = resolution;
+    renderQuarantine();
+    renderNav();
+  })
+  .catch(() => {
+    const idx = DECISIONS.findIndex(d => d.id === id);
+    if (idx !== -1) DECISIONS[idx].exec_status = resolution;
+    renderQuarantine();
+    renderNav();
+  });
 }
 
 

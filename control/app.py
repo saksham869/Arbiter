@@ -807,3 +807,41 @@ def deactivate_kill_switch():
     global _kill_switch_active
     _kill_switch_active = False
     return {"active": False, "message": "Autonomous execution resumed."}
+
+
+# ── Quarantine reconciliation ───────────────────────────────────────────────────
+@app.post("/control/quarantine/resolve")
+def resolve_quarantine(body: dict):
+    """
+    Reconcile a UNKNOWN-state action.
+    body: { action_id: str, resolution: "CONFIRMED_SUCCESS" | "CONFIRMED_NOT_FOUND" }
+    """
+    action_id  = body.get("action_id", "")
+    resolution = body.get("resolution", "")
+    if resolution not in ("CONFIRMED_SUCCESS", "CONFIRMED_NOT_FOUND"):
+        raise HTTPException(status_code=400, detail="resolution must be CONFIRMED_SUCCESS or CONFIRMED_NOT_FOUND")
+    # Map to short decision codes that fit varchar(8)
+    decision_code = "RESOLVED" if resolution == "CONFIRMED_SUCCESS" else "CLOSED"
+    row = ledger.get_one(action_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="action not found")
+    if row.get("exec_status") != "UNKNOWN":
+        raise HTTPException(status_code=409, detail=f"action is {row.get('exec_status')}, not UNKNOWN")
+
+    # Write reconciliation audit event
+    ledger.append(
+        merchant_id = row.get("merchant_id", "system"),
+        tool        = "reconcile",
+        args        = {"resolved_action_id": action_id, "resolution": resolution},
+        decision    = decision_code,
+        reason      = "manual_reconciliation",
+        margin_pct  = None,
+        parent_id   = action_id,
+        attempt_no  = 1,
+    )
+    return {
+        "action_id":  action_id,
+        "resolution": resolution,
+        "audit":      "written",
+        "message":    f"Quarantine resolved: {resolution}. Audit event committed to ledger."
+    }
