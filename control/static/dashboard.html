@@ -1254,6 +1254,16 @@ function renderPolicy() {
           </button>
           <span style="font-size:11px;color:#818597;margin-left:14px">Changes submit to backend — never calculated in browser</span>
         </div>
+
+        <!-- Policy simulator -->
+        <div style="padding:16px 20px;border-top:1px solid #E2E8F0;background:#F8FAFC">
+          <div style="font-size:12px;font-weight:600;color:#818597;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:10px">Policy impact simulator</div>
+          <div style="font-size:12px;color:#818597;margin-bottom:12px">How would the current policy settings affect your historical decisions?</div>
+          <button onclick="runPolicySimulator()" style="padding:8px 18px;background:#012652;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer">
+            Simulate impact on 50 decisions
+          </button>
+          <div id="sim-result" style="margin-top:12px"></div>
+        </div>
       </div>
 
       <!-- Right panel -->
@@ -1648,6 +1658,56 @@ function approveExtraction(extractionId) {
 function rejectExtraction(extractionId) {
   catalogPending = catalogPending.filter(p => p.extraction_id !== extractionId);
   renderCatalog();
+}
+
+/* ── Policy simulator ── */
+function runPolicySimulator() {
+  var btn = event.target;
+  btn.textContent = 'Simulating...';
+  btn.disabled = true;
+
+  // Fetch recent decisions and simulate policy impact
+  fetch('/control/audit?limit=100')
+    .then(r => r.json())
+    .then(data => {
+      btn.textContent = 'Simulate impact on 50 decisions';
+      btn.disabled = false;
+
+      var entries = data.entries || [];
+      var floor = policyValues.margin_floor;
+      var maxDisc = policyValues.max_discount;
+      var returnLimit = policyValues.return_rate_limit;
+
+      // Simulate: how many ALLOW would become DENY with current settings
+      var wouldAllow = 0, wouldDeny = 0, wouldGate = 0, unchanged = 0;
+      entries.forEach(function(d) {
+        if (!d.margin_pct) { wouldDeny++; return; }
+        var m = parseFloat(d.margin_pct);
+        if (m < floor) wouldDeny++;
+        else if (d.decision === 'GATE') wouldGate++;
+        else wouldAllow++;
+      });
+
+      var total = entries.length;
+      var el = document.getElementById('sim-result');
+      if (!el) return;
+      el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:4px">'
+        + '<div style="background:#DCFCE7;border:1px solid #BBF7D0;border-radius:5px;padding:10px 12px;text-align:center">'
+        + '<div style="font-size:18px;font-weight:700;color:#16A34A;font-family:JetBrains Mono,monospace">' + wouldAllow + '</div>'
+        + '<div style="font-size:11px;color:#16A34A;margin-top:2px">Would ALLOW</div></div>'
+        + '<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:5px;padding:10px 12px;text-align:center">'
+        + '<div style="font-size:18px;font-weight:700;color:#D97706;font-family:JetBrains Mono,monospace">' + wouldGate + '</div>'
+        + '<div style="font-size:11px;color:#D97706;margin-top:2px">Would GATE</div></div>'
+        + '<div style="background:#FEE2E2;border:1px solid #FECACA;border-radius:5px;padding:10px 12px;text-align:center">'
+        + '<div style="font-size:18px;font-weight:700;color:#DC2626;font-family:JetBrains Mono,monospace">' + wouldDeny + '</div>'
+        + '<div style="font-size:11px;color:#DC2626;margin-top:2px">Would DENY</div></div>'
+        + '</div>'
+        + '<div style="font-size:11px;color:#818597;margin-top:8px">Based on ' + total + ' historical decisions with margin_floor=' + floor + '% and max_discount=' + maxDisc + '%</div>';
+    })
+    .catch(function() {
+      btn.textContent = 'Simulate impact on 50 decisions';
+      btn.disabled = false;
+    });
 }
 
 /* ── Kill switch toggle ── */
