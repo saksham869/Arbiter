@@ -257,9 +257,50 @@ def approve_action(action_id: str, token: str):
             status_code=200
         )
 
+    # Revalidate economics before executing approved action
+    # GATE approval can be delayed — policy or COGS may have changed
+    args = json.loads(row.get("args_json", "{}"))
+    try:
+        _cat = _load_catalog()
+        _pol = _load_policy()
+        _eng = _build_engine(_pol, _cat)
+        _items_raw = args.get("items", [])
+        from control.margin import LineItem as _LI2
+        _line_items = []
+        for _it in _items_raw:
+            _cogs = _cat.get(_it.get("sku",""), {}).get("cogs_paise")
+            if _cogs is None:
+                from fastapi.responses import HTMLResponse
+                return HTMLResponse(
+                    f"<h2>Approval rejected: COGS for {_it.get('sku')} no longer in trusted catalog.</h2>",
+                    status_code=409
+                )
+            _line_items.append(_LI2(
+                sku=_it.get("sku",""),
+                quantity=_it.get("quantity",1),
+                list_price_paise=_it.get("list_price_paise",0),
+                cogs_paise=_cogs,
+            ))
+        if _line_items:
+            _list_tot = sum(i.list_price_paise * i.quantity for i in _line_items)
+            _disc = args.get("discount_pct", 0)
+            _paid = int(_list_tot * (1 - _disc / 100))
+            _dec = _eng.check(items=_line_items, paid_paise=_paid, list_total_paise=_list_tot)
+            if _dec.result == "DENY":
+                from fastapi.responses import HTMLResponse
+                return HTMLResponse(
+                    f"<h2>Approval rejected: Economics changed since GATE decision. Reason: {_dec.reason}. Please resubmit.</h2>",
+                    status_code=409
+                )
+        if _kill_switch_active:
+            from fastapi.responses import HTMLResponse
+            return HTMLResponse("<h2>Approval rejected: Kill switch active. Deactivate first.</h2>", status_code=409)
+    except Exception as _e:
+        import logging
+        logging.getLogger("margin-guard").warning("GATE revalidation error: %s", _e)
+
     # Execute the approved action
     from control.execution import mint_token, execute
-    args = json.loads(row.get("args_json", "{}"))
     tok  = mint_token(action_id)
     result = execute(action_id, tok, row.get("tool", "create_order"), args)
 
