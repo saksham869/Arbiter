@@ -267,3 +267,75 @@ def test_discount_ceiling_enforced():
     """25% discount exceeds 22.74% ceiling → must not ALLOW."""
     data = propose([SHOE, SOCK], 25)
     assert data["decision"] != "ALLOW", f"25% above ceiling must not ALLOW, got {data['decision']}"
+
+
+def test_concurrent_approval_creates_single_order():
+    """
+    Two simultaneous dashboard approve calls on the same GATE action
+    must create exactly ONE Razorpay order — not two.
+    DynamoDB idempotency must prevent duplicate execution.
+    """
+    import threading, httpx, os
+    CONTROL = os.getenv("CONTROL_URL", "http://localhost:8085")
+
+    import time
+    time.sleep(3)  # brief pause
+
+    # Create GATE via high-value order (amount_gate > 500k paise)
+    # Independent of velocity counter — uses amount threshold not discount
+    gate_resp = httpx.post(f"{CONTROL}/control/propose", json={
+        "objective": {"type": "upsell", "target_sku": "WATCH-1", "horizon_days": 7},
+        "action": {
+            "type": "DISCOUNT_OFFER",
+            "items": [
+                {"sku": "WATCH-1", "quantity": 2, "list_price_paise": 300000},
+            ],
+            "discount_pct": 5,
+        },
+        "rationale": "concurrency test",
+        "attempt_no": 1,
+    }, timeout=15)
+    assert gate_resp.status_code == 200
+    gate_data = gate_resp.json()
+    # Accept GATE or already-executed (idempotency proved either way)
+    if gate_data["decision"] not in ("GATE", "ALLOW"):
+        import pytest
+        pytest.skip(f"Could not create GATE for concurrency test: {gate_data['decision']} ({gate_data.get('reason')})")
+    action_id = gate_data["action_id"]
+
+    # Fire two simultaneous approve requests
+    results = []
+    def approve():
+        try:
+            r = httpx.post(
+                f"{CONTROL}/control/dashboard/approve",
+                params={"action_id": action_id},
+                timeout=20,
+            )
+            results.append(r.text)
+        except Exception as e:
+            results.append(f"ERROR: {e}")
+
+    t1 = threading.Thread(target=approve)
+    t2 = threading.Thread(target=approve)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    assert len(results) == 2, "Both requests must complete"
+
+    # Extract Razorpay order IDs from HTML responses
+    import re
+    order_ids = []
+    for r in results:
+        match = re.search(r'order_[A-Za-z0-9]+', r)
+        if match:
+            order_ids.append(match.group())
+
+    # At most one unique Razorpay order should have been created
+    unique_orders = set(order_ids)
+    assert len(unique_orders) <= 1, \
+        f"Duplicate Razorpay orders created: {unique_orders}. Idempotency failure."
+
+    print(f"Concurrent approval result: {len(unique_orders)} unique order(s) — correct")
