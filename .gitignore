@@ -25,3 +25,4 @@ data/orders_holdout.json
 # Build
 dist/
 *.egg-info/
+data/test_invoice.png
