@@ -403,7 +403,7 @@ function renderDecisions() {
       <div style="padding:12px 18px;border-bottom:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center;background:#F8FAFC">
         <div>
           <div style="font-size:10px;font-weight:700;color:#818597;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px">Proposal</div>
-          <div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace">MG-${detailRow.id.slice(0,6).toUpperCase()}</div>
+          <div style="font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace">AR-${detailRow.id.slice(0,6).toUpperCase()}</div>
         </div>
         <button onclick="closeDetail()" style="background:none;border:none;font-size:20px;color:#818597;cursor:pointer">×</button>
       </div>
@@ -674,7 +674,7 @@ function renderApprovals() {
         <div style="background:#fff;border:1px solid #E2E8F0;border-radius:6px;padding:20px;margin-bottom:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
             <div>
-              <div style="font-size:14px;font-weight:600;font-family:'JetBrains Mono',monospace">MG-${d.id.slice(0,8).toUpperCase()}</div>
+              <div style="font-size:14px;font-weight:600;font-family:'JetBrains Mono',monospace">AR-${d.id.slice(0,8).toUpperCase()}</div>
               <div style="font-size:12px;color:#818597;margin-top:3px">${skus}</div>
               <div style="font-size:11px;color:#818597;margin-top:2px;font-family:'JetBrains Mono',monospace">${d.ts ? d.ts.replace('T',' ').slice(0,19) : ''}</div>
             </div>
