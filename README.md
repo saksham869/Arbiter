@@ -1,4 +1,4 @@
-# Arbiter
+# margin-guard
 
 **Economic authorization layer for autonomous AI commerce agents.**
 
@@ -42,7 +42,7 @@ The agent "succeeded." The merchant bled.
 > **The AI decides what it wants to accomplish.**
 > **It cannot decide what financial actions it is authorized to take.**
 
-Arbiter is the layer between those two statements.
+MarginGuard is the layer between those two statements.
 
 ---
 
@@ -51,7 +51,7 @@ Arbiter is the layer between those two statements.
 ```
 Agent:   "I want to bundle SHOE-001 + SOCK-3PK at 30% off."
 
-Arbiter:
+MarginGuard:
   margin    = 9.74%
   floor     = 18.00%
   ceiling   = 22.74%   ← closed-form, not guessed
@@ -64,7 +64,7 @@ Agent reads constraint. Changes strategy.
 Agent:   "Switching to 18% — within the 22.74% ceiling.
           SOCK-3PK: affinity 0.579, medium inventory pressure."
 
-Arbiter:
+MarginGuard:
   margin         = 22.61%
   economic_score = 70.44/100
   decision       = ALLOW
@@ -117,7 +117,7 @@ BEDROCK GUARDRAILS                     Layer 1 AI safety
   Blocks before reaching control plane
        │
        ▼
-ARBITER ECONOMIC CONTROL PLANE
+MARGINEGUARD ECONOMIC CONTROL PLANE
   MarginEngine (pure arithmetic, zero LLM, zero network)
     fee    = paid × 2%
     gst    = fee × 18%
@@ -173,7 +173,7 @@ ARBITER ECONOMIC CONTROL PLANE
 ## Experiment results — honest reporting
 
 Real A/B experiment. 50 holdout orders. Split by ORDER_ID hash.
-Control: no intervention. Treatment: agent proposes within Arbiter bounds.
+Control: no intervention. Treatment: agent proposes within MarginGuard bounds.
 
 ```
                     CONTROL      TREATMENT    LIFT
@@ -369,8 +369,8 @@ GET   /dashboard                        governance console
 ## Quickstart
 
 ```bash
-git clone https://github.com/saksham869/Arbiter
-cd Arbiter
+git clone https://github.com/saksham869/margin-guard
+cd margin-guard
 pip3 install -r requirements.txt
 docker compose up -d
 cp .env.example .env
@@ -396,73 +396,4 @@ It is an economic authorization and governance control plane. The AI is bounded 
 
 ---
 
----
-
-## Reviewer attack checklist
-
-Can a reviewer break the authorization boundary?
-
-| Attack | Answer | Proof |
-|---|---|---|
-| AI executes Razorpay directly | **NO** | `grep -rn "razorpay" agent/` → 0 results |
-| AI modifies policy | **NO** | No policy endpoint in agent permissions |
-| Expired passport executes | **NO** | `validate_passport()` checks TTL — returns `passport_expired` |
-| Passport replayed | **NO** | `exec_status` check + DynamoDB idempotency key |
-| Stale policy executes | **NO** | `passport_stale_policy` check in `validate_passport()` |
-| Concurrent approval double-executes | **NO** | `test_concurrent_approval_creates_single_order` — 1 order from 2 threads |
-| Unknown COGS authorized | **NO** | `test_unknown_cogs_never_allow` — DENY on missing cost basis |
-| 5xx becomes SUCCESS | **NO** | UNKNOWN → QUARANTINE → SAFE_HALT — no retry, no assumption |
-| Ledger tampering unnoticed | **NO** | `test_tamper_detected` — SHA-256 chain breaks |
-| Kill switch bypassed | **NO** | `test_kill_switch_blocks_execution` — backend-enforced |
-| LLM overrides policy via rationale | **NO** | Live attack mode — 9/9 social engineering attempts blocked |
-| Higher COGS raises discount ceiling | **NO** | `test_margin_ceiling_invariant_higher_cogs` — mathematical proof |
-
-```bash
-# Run the proof
-python3 -m pytest tests/ -q
-# 70 passed, 1 skipped
-
-# Verify audit chain
-curl http://localhost:8085/control/audit/verify
-# {"intact": true, "checked": N}
-
-# Prove agent has no credentials
-grep -rn "razorpay" agent/
-# 0 results
-```
-
-
----
-
-## Graceful degradation
-
-What happens when each dependency fails:
-
-| Dependency fails | System behavior |
-|---|---|
-| Bedrock (agent) | Agent unavailable. Policy engine and existing passports unaffected. No new proposals. |
-| Bedrock Guardrails | Proposals blocked at perimeter. No financial authorization attempted. |
-| MariaDB | No authorization decisions. No ledger writes. System halts. |
-| DynamoDB | Execution blocked. No Razorpay calls without idempotency guarantee. |
-| SQS | GATE action still created and logged. Merchant notification via SNS only. Queue backlog visible. |
-| SNS | GATE action queued in SQS. Merchant not notified. Action remains pending. |
-| S3 Object Lock | Decision recorded in MariaDB hash chain. S3 evidence write fails — surfaced in logs. |
-| Razorpay | Execution returns UNKNOWN. Action quarantined. No retry. No assumption of success or failure. |
-| AWS Secrets Manager | Credentials unavailable. Execution service halts. No Razorpay calls. |
-| Kill switch store | In current prototype: in-process state resets on restart. Production: fail-closed (assume active). |
-| Policy store | PolicyEngine fails closed — DENY on corrupt or missing policy. |
-
-
----
-
-## Limitations
-
-- **Experiment is underpowered.** n=50 with 27/23 split is below threshold for statistical significance. Results are directional only — not causal evidence of growth.
-- **Authorization score is heuristic.** The economic score (0-100) is a weighted penalty function, not a calibrated probability of financial risk.
-- **Razorpay integration runs in test mode.** Orders are created against Razorpay test API. No real payments are captured.
-- **COGS catalog is static.** Real-time supplier price feeds are not implemented. COGS changes require manual catalog update or invoice re-extraction.
-- **Kill switch is in-process.** `_kill_switch_active` is a Python global — it resets on server restart. Production would require persistent state (Redis/DynamoDB).
-- **Policy version check is advisory.** Stale passport detection is implemented but execution falls back gracefully rather than hard-rejecting.
-
-
-*github.com/saksham869/Arbiter · Razorpay AI Buildathon 2026 · Track 01*
+*github.com/saksham869/margin-guard · Razorpay AI Buildathon 2026 · Track 01*
