@@ -348,6 +348,11 @@ Results are directional only - not causal evidence.
 
 ---
 
+
+## Architecture
+
+![Architecture](docs/Arbiter_Architecture.png)
+
 ## Governance Console
 
 10-page dashboard at `http://localhost:8085/dashboard`:
